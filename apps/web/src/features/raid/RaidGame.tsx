@@ -1,104 +1,163 @@
 import { useEffect, useMemo, useState } from "react";
-import { BATTLE_DURATION_SECONDS, initialRaidState } from "./raidState";
-import type { RaidState } from "./types";
 
-function clamp(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max);
-}
+type RaidPlayer = {
+    telegramUserId: string;
+    displayName: string;
+    isHost: boolean;
+    isReady: boolean;
+    joinedAt: number;
+};
+
+type Raid = {
+    id: string;
+    telegramChatId: string;
+    hostTelegramUserId: string;
+    hostDisplayName: string;
+    status: "lobby" | "cancelled" | "battle" | "finished";
+    createdAt: number;
+    expiresAt: number;
+    players: Record<string, RaidPlayer>;
+};
+
+type RaidState =
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "loaded"; raid: Raid; serverTime: number }
+    | { status: "error"; message: string };
+
+type TelegramUser = {
+    id?: number;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+};
+
+const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 export function RaidGame() {
-    const [raid, setRaid] = useState<RaidState>(initialRaidState);
+    const params = useMemo(() => new URLSearchParams(window.location.search), []);
+    const raidId = params.get("raidId");
+    const chatId = params.get("chatId");
 
-    const currentPlayer = raid.players.find(
-        (player) => player.id === raid.currentPlayerId
-    );
-
-    const bossHpPercent = useMemo(() => {
-        return clamp((raid.boss.hp / raid.boss.maxHp) * 100, 0, 100);
-    }, [raid.boss.hp, raid.boss.maxHp]);
-
-    const totalDamage = useMemo(() => {
-        return raid.players.reduce((sum, player) => sum + player.damage, 0);
-    }, [raid.players]);
-
-    const sortedPlayers = useMemo(() => {
-        return [...raid.players].sort((a, b) => b.damage - a.damage);
-    }, [raid.players]);
-
-    const allPlayersReady = raid.players.every((player) => player.ready);
+    const [raidState, setRaidState] = useState<RaidState>({ status: "idle" });
+    const [isJoining, setIsJoining] = useState(false);
+    const [localNow, setLocalNow] = useState(Date.now());
 
     useEffect(() => {
-        if (raid.phase !== "battle") return;
+        window.Telegram?.WebApp?.ready?.();
+        window.Telegram?.WebApp?.expand?.();
+    }, []);
 
-        const timer = window.setInterval(() => {
-            setRaid((current) => {
-                if (current.phase !== "battle") return current;
-
-                const nextTimeLeft = current.timeLeft - 1;
-
-                if (nextTimeLeft <= 0 || current.boss.hp <= 0) {
-                    return {
-                        ...current,
-                        phase: "results",
-                        timeLeft: 0,
-                    };
-                }
-
-                return {
-                    ...current,
-                    timeLeft: nextTimeLeft,
-                };
-            });
+    useEffect(() => {
+        const timerId = window.setInterval(() => {
+            setLocalNow(Date.now());
         }, 1000);
 
-        return () => window.clearInterval(timer);
-    }, [raid.phase]);
+        return () => {
+            window.clearInterval(timerId);
+        };
+    }, []);
 
-    function toggleReady(playerId: string) {
-        setRaid((current) => ({
-            ...current,
-            players: current.players.map((player) =>
-                player.id === playerId ? { ...player, ready: !player.ready } : player
-            ),
-        }));
+    useEffect(() => {
+        if (!raidId) {
+            return;
+        }
+
+        void loadRaid(raidId);
+    }, [raidId]);
+
+    async function loadRaid(nextRaidId: string) {
+        setRaidState({ status: "loading" });
+
+        try {
+            const response = await fetch(`${apiUrl}/raids/${nextRaidId}`);
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error ?? `API returned ${response.status}`);
+            }
+
+            setRaidState({
+                status: "loaded",
+                raid: data.raid as Raid,
+                serverTime: Number(data.serverTime)
+            });
+        } catch (error) {
+            setRaidState({
+                status: "error",
+                message: error instanceof Error ? error.message : "Unknown error"
+            });
+        }
     }
 
-    function startBattle() {
-        if (!allPlayersReady) return;
+    async function joinRaid() {
+        if (!raidId) {
+            return;
+        }
 
-        setRaid((current) => ({
-            ...current,
-            phase: "battle",
-            timeLeft: BATTLE_DURATION_SECONDS,
-        }));
-    }
+        setIsJoining(true);
 
-    function hitBoss() {
-        if (raid.phase !== "battle") return;
+        try {
+            const telegramUser = getTelegramUser();
+            const fallbackUser = getOrCreateFallbackUser();
 
-        const damage = Math.floor(Math.random() * 85) + 65;
+            const telegramUserId = telegramUser?.id
+                ? String(telegramUser.id)
+                : fallbackUser.id;
 
-        setRaid((current) => {
-            const nextBossHp = Math.max(current.boss.hp - damage, 0);
+            const displayName =
+                getTelegramDisplayName(telegramUser) ?? fallbackUser.displayName;
 
-            return {
-                ...current,
-                boss: {
-                    ...current.boss,
-                    hp: nextBossHp,
+            const response = await fetch(`${apiUrl}/raids/${raidId}/join`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
                 },
-                players: current.players.map((player) =>
-                    player.id === current.currentPlayerId
-                        ? { ...player, damage: player.damage + damage }
-                        : player
-                ),
-                phase: nextBossHp <= 0 ? "results" : current.phase,
-            };
-        });
+                body: JSON.stringify({
+                    telegramUserId,
+                    displayName
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error ?? `API returned ${response.status}`);
+            }
+
+            setRaidState({
+                status: "loaded",
+                raid: data.raid as Raid,
+                serverTime: Date.now()
+            });
+        } catch (error) {
+            setRaidState({
+                status: "error",
+                message: error instanceof Error ? error.message : "Unknown error"
+            });
+        } finally {
+            setIsJoining(false);
+        }
     }
 
-    function resetRaid() {
-        setRaid(initialRaidState);
+    if (!raidId) {
+        return (
+            <main className="app-shell">
+                <section className="game-card">
+                    <p className="eyebrow">Raid Boss</p>
+                    <h1>No raid selected</h1>
+                    <p className="muted">
+                        Open the app from the Telegram Join Raid button, or add a raidId to
+                        the URL.
+                    </p>
+
+                    <div className="debug-panel">
+                        <span>Expected URL format:</span>
+                        <code>/?raidId=abc123&amp;chatId=-100...</code>
+                    </div>
+                </section>
+            </main>
+        );
     }
 
     return (
@@ -106,14 +165,12 @@ export function RaidGame() {
             <section className="game-card">
                 <header className="game-header">
                     <div>
-                        <p className="eyebrow">Telegram Mini App MVP</p>
-                        <h1>Co-op Raid</h1>
+                        <p className="eyebrow">Telegram Raid Lobby</p>
+                        <h1>Boss Raid</h1>
                     </div>
 
                     <div className="status-pill">
-                        {raid.phase === "lobby" && "Lobby"}
-                        {raid.phase === "battle" && `${raid.timeLeft}s`}
-                        {raid.phase === "results" && "Results"}
+                        {raidState.status === "loaded" ? raidState.raid.status : "Loading"}
                     </div>
                 </header>
 
@@ -122,93 +179,169 @@ export function RaidGame() {
 
                     <div className="boss-info">
                         <div className="boss-row">
-                            <h2>{raid.boss.name}</h2>
-                            <span>
-                {raid.boss.hp} / {raid.boss.maxHp} HP
-              </span>
+                            <h2>Meme Boss</h2>
+                            <span>Lobby phase</span>
                         </div>
 
                         <div className="hp-bar" aria-label="Boss health">
-                            <div
-                                className="hp-bar-fill"
-                                style={{ width: `${bossHpPercent}%` }}
-                            />
+                            <div className="hp-bar-fill" style={{ width: "100%" }} />
                         </div>
                     </div>
                 </section>
 
-                {raid.phase === "lobby" && (
-                    <section className="panel">
-                        <h3>Raid Lobby</h3>
-                        <p className="muted">
-                            Players must be ready before the host starts the fight.
-                        </p>
+                <div className="raid-meta">
+                    <p>
+                        Raid ID: <span>{raidId}</span>
+                    </p>
 
-                        <div className="player-list">
-                            {raid.players.map((player) => (
+                    {chatId && (
+                        <p>
+                            Chat ID: <span>{chatId}</span>
+                        </p>
+                    )}
+                </div>
+
+                {raidState.status === "loading" && (
+                    <section className="panel">
+                        <h3>Loading raid...</h3>
+                        <p className="muted">Fetching lobby state from the API.</p>
+                    </section>
+                )}
+
+                {raidState.status === "error" && (
+                    <section className="panel danger-panel">
+                        <h3>Raid error</h3>
+                        <p>{raidState.message}</p>
+                    </section>
+                )}
+
+                {raidState.status === "loaded" && (
+                    <>
+                        <section className="status-grid">
+                            <div className="status-box">
+                                <span>Status</span>
+                                <strong>{raidState.raid.status}</strong>
+                            </div>
+
+                            <div className="status-box">
+                                <span>Players</span>
+                                <strong>{Object.keys(raidState.raid.players).length}/6</strong>
+                            </div>
+
+                            <div className="status-box">
+                                <span>Expires</span>
+                                <strong>{formatTimeLeft(raidState.raid.expiresAt, localNow)}</strong>
+                            </div>
+                        </section>
+
+                        <section className="panel">
+                            <div className="panel-header">
+                                <div>
+                                    <h3>Players</h3>
+                                    <p className="muted small">Current Redis lobby state.</p>
+                                </div>
+
                                 <button
-                                    key={player.id}
-                                    className="player-row"
+                                    className="ghost-button"
                                     type="button"
-                                    onClick={() => toggleReady(player.id)}
+                                    onClick={() => loadRaid(raidId)}
                                 >
-                                    <span className="avatar">{player.avatar}</span>
-                                    <span>{player.name}</span>
-                                    <strong>{player.ready ? "Ready" : "Not ready"}</strong>
+                                    Refresh
                                 </button>
-                            ))}
-                        </div>
+                            </div>
+
+                            <div className="player-list">
+                                {Object.values(raidState.raid.players).map((player) => (
+                                    <div className="player-row" key={player.telegramUserId}>
+                                        <div className="player-main">
+                      <span className="avatar">
+                        {player.isHost ? "👑" : "⚔️"}
+                      </span>
+
+                                            <div>
+                                                <strong>{player.displayName}</strong>
+                                                <span>{player.isHost ? "Host" : "Player"}</span>
+                                            </div>
+                                        </div>
+
+                                        <strong className={player.isReady ? "ready" : "not-ready"}>
+                                            {player.isReady ? "Ready" : "Not ready"}
+                                        </strong>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
 
                         <button
                             className="primary-button"
                             type="button"
-                            disabled={!allPlayersReady}
-                            onClick={startBattle}
+                            disabled={isJoining}
+                            onClick={joinRaid}
                         >
-                            Start Raid
+                            {isJoining ? "Joining..." : "Join Lobby"}
                         </button>
-                    </section>
-                )}
-
-                {raid.phase === "battle" && (
-                    <section className="panel battle-panel">
-                        <h3>Battle Phase</h3>
-                        <p className="muted">
-                            Tap to deal damage. Later this will become real multiplayer sync.
-                        </p>
-
-                        <button className="hit-button" type="button" onClick={hitBoss}>
-                            Strike
-                        </button>
-
-                        <p className="damage-line">
-                            Your damage: <strong>{currentPlayer?.damage ?? 0}</strong>
-                        </p>
-                    </section>
-                )}
-
-                {raid.phase === "results" && (
-                    <section className="panel">
-                        <h3>{raid.boss.hp <= 0 ? "Boss defeated" : "Raid finished"}</h3>
-                        <p className="muted">Total raid damage: {totalDamage}</p>
-
-                        <div className="leaderboard">
-                            {sortedPlayers.map((player, index) => (
-                                <div className="leaderboard-row" key={player.id}>
-                  <span>
-                    #{index + 1} {player.avatar} {player.name}
-                  </span>
-                                    <strong>{player.damage}</strong>
-                                </div>
-                            ))}
-                        </div>
-
-                        <button className="primary-button" type="button" onClick={resetRaid}>
-                            New Raid
-                        </button>
-                    </section>
+                    </>
                 )}
             </section>
         </main>
     );
+}
+
+function formatTimeLeft(expiresAt: number, now: number): string {
+    const seconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+    const minutes = Math.floor(seconds / 60);
+    const restSeconds = seconds % 60;
+
+    return `${minutes}:${String(restSeconds).padStart(2, "0")}`;
+}
+
+function getTelegramUser(): TelegramUser | null {
+    return window.Telegram?.WebApp?.initDataUnsafe?.user ?? null;
+}
+
+function getTelegramDisplayName(user: TelegramUser | null): string | null {
+    if (!user) {
+        return null;
+    }
+
+    if (user.username) {
+        return `@${user.username}`;
+    }
+
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+
+    return fullName || null;
+}
+
+function getOrCreateFallbackUser() {
+    const storageKey = "raid-game-debug-user";
+    const existing = window.localStorage.getItem(storageKey);
+
+    if (existing) {
+        return JSON.parse(existing) as { id: string; displayName: string };
+    }
+
+    const user = {
+        id: `debug_${crypto.randomUUID()}`,
+        displayName: "Local Player"
+    };
+
+    window.localStorage.setItem(storageKey, JSON.stringify(user));
+
+    return user;
+}
+
+declare global {
+    interface Window {
+        Telegram?: {
+            WebApp?: {
+                initData?: string;
+                initDataUnsafe?: {
+                    user?: TelegramUser;
+                };
+                ready?: () => void;
+                expand?: () => void;
+            };
+        };
+    }
 }
