@@ -17,6 +17,8 @@ export function RaidGame() {
         currentPlayer,
         canStart,
         localNow,
+        socketStatus,
+        socketError,
         isJoining,
         isReadyUpdating,
         isStarting,
@@ -101,6 +103,16 @@ export function RaidGame() {
                     <p>
                         User source: <span>{currentUser.source}</span>
                     </p>
+
+                    <p>
+                        Realtime: <span>{socketStatus}</span>
+                    </p>
+
+                    {socketError && (
+                        <p>
+                            Socket error: <span>{socketError}</span>
+                        </p>
+                    )}
                 </div>
 
                 {raidState.status === "loading" && (
@@ -140,8 +152,7 @@ export function RaidGame() {
                             <section className="panel battle-placeholder">
                                 <h3>Battle started</h3>
                                 <p className="muted">
-                                    The raid moved to battle state. Next step: Socket.IO room sync
-                                    and battle prototype.
+                                    The raid moved to battle state. Next step: battle prototype.
                                 </p>
                             </section>
                         )}
@@ -150,7 +161,7 @@ export function RaidGame() {
                             <div className="panel-header">
                                 <div>
                                     <h3>Players</h3>
-                                    <p className="muted small">Current Redis lobby state.</p>
+                                    <p className="muted small">Realtime Redis lobby state.</p>
                                 </div>
 
                                 <button
