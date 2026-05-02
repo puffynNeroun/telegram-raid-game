@@ -31,6 +31,12 @@ export function RaidGame() {
         currentUser
     });
 
+    const battle = raid?.battle ?? null;
+
+    const bossHpPercent = battle
+        ? Math.max(0, Math.min(100, (battle.boss.hp / battle.boss.maxHp) * 100))
+        : 100;
+
     useEffect(() => {
         initTelegramWebApp();
     }, []);
@@ -73,14 +79,18 @@ export function RaidGame() {
 
                     <div className="boss-info">
                         <div className="boss-row">
-                            <h2>Meme Boss</h2>
+                            <h2>{battle?.boss.name ?? "Meme Boss"}</h2>
                             <span>
-                {raid?.status === "battle" ? "Battle started" : "Lobby phase"}
+                {battle
+                    ? `${battle.boss.hp}/${battle.boss.maxHp} HP`
+                    : raid?.status === "battle"
+                        ? "Battle started"
+                        : "Lobby phase"}
               </span>
                         </div>
 
                         <div className="hp-bar" aria-label="Boss health">
-                            <div className="hp-bar-fill" style={{ width: "100%" }} />
+                            <div className="hp-bar-fill" style={{ width: `${bossHpPercent}%` }} />
                         </div>
                     </div>
                 </section>
@@ -118,7 +128,7 @@ export function RaidGame() {
                 {raidState.status === "loading" && (
                     <section className="panel">
                         <h3>Loading raid...</h3>
-                        <p className="muted">Fetching lobby state from the API.</p>
+                        <p className="muted">Fetching raid state from the API.</p>
                     </section>
                 )}
 
@@ -143,17 +153,46 @@ export function RaidGame() {
                             </div>
 
                             <div className="status-box">
-                                <span>Expires</span>
-                                <strong>{formatTimeLeft(raidState.raid.expiresAt, localNow)}</strong>
+                                <span>{battle ? "Battle ends" : "Expires"}</span>
+                                <strong>
+                                    {battle
+                                        ? formatTimeLeft(battle.endsAt, localNow)
+                                        : formatTimeLeft(raidState.raid.expiresAt, localNow)}
+                                </strong>
                             </div>
                         </section>
 
-                        {raidState.raid.status === "battle" && (
-                            <section className="panel battle-placeholder">
-                                <h3>Battle started</h3>
-                                <p className="muted">
-                                    The raid moved to battle state. Next step: battle prototype.
-                                </p>
+                        {battle && (
+                            <section className="panel battle-panel">
+                                <div className="battle-header">
+                                    <div>
+                                        <h3>Battle active</h3>
+                                        <p className="muted small">Server-side battle state is live.</p>
+                                    </div>
+
+                                    <strong className="battle-timer">
+                                        {formatTimeLeft(battle.endsAt, localNow)}
+                                    </strong>
+                                </div>
+
+                                <div className="battle-stats-grid">
+                                    <div className="battle-stat">
+                                        <span>Boss HP</span>
+                                        <strong>
+                                            {battle.boss.hp}/{battle.boss.maxHp}
+                                        </strong>
+                                    </div>
+
+                                    <div className="battle-stat">
+                                        <span>Phase</span>
+                                        <strong>{battle.boss.phase}</strong>
+                                    </div>
+
+                                    <div className="battle-stat">
+                                        <span>Outcome</span>
+                                        <strong>{battle.outcome ?? "pending"}</strong>
+                                    </div>
+                                </div>
                             </section>
                         )}
 
@@ -161,7 +200,9 @@ export function RaidGame() {
                             <div className="panel-header">
                                 <div>
                                     <h3>Players</h3>
-                                    <p className="muted small">Realtime Redis lobby state.</p>
+                                    <p className="muted small">
+                                        {battle ? "Battle player state." : "Realtime Redis lobby state."}
+                                    </p>
                                 </div>
 
                                 <button
@@ -174,27 +215,38 @@ export function RaidGame() {
                             </div>
 
                             <div className="player-list">
-                                {players.map((player) => (
-                                    <div className="player-row" key={player.telegramUserId}>
-                                        <div className="player-main">
-                      <span className="avatar">
-                        {player.isHost ? "👑" : "⚔️"}
-                      </span>
+                                {players.map((player) => {
+                                    const battlePlayer = battle?.players[player.telegramUserId];
 
-                                            <div>
-                                                <strong>{player.displayName}</strong>
-                                                <span>
-                          {player.isHost ? "Host" : "Player"}
-                                                    {player.telegramUserId === currentUser.id ? " · You" : ""}
+                                    return (
+                                        <div className="player-row" key={player.telegramUserId}>
+                                            <div className="player-main">
+                        <span className="avatar">
+                          {player.isHost ? "👑" : "⚔️"}
                         </span>
-                                            </div>
-                                        </div>
 
-                                        <strong className={player.isReady ? "ready" : "not-ready"}>
-                                            {player.isReady ? "Ready" : "Not ready"}
-                                        </strong>
-                                    </div>
-                                ))}
+                                                <div>
+                                                    <strong>{player.displayName}</strong>
+                                                    <span>
+                            {player.isHost ? "Host" : "Player"}
+                                                        {player.telegramUserId === currentUser.id ? " · You" : ""}
+                                                        {battlePlayer
+                                                            ? ` · HP ${battlePlayer.hp}/${battlePlayer.maxHp}`
+                                                            : ""}
+                          </span>
+                                                </div>
+                                            </div>
+
+                                            <strong className={battlePlayer ? "ready" : player.isReady ? "ready" : "not-ready"}>
+                                                {battlePlayer
+                                                    ? `${battlePlayer.damage} dmg`
+                                                    : player.isReady
+                                                        ? "Ready"
+                                                        : "Not ready"}
+                                            </strong>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </section>
 

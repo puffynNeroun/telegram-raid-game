@@ -329,10 +329,52 @@ button {
   text-align: center;
 }
 
-.battle-placeholder {
+.battle-panel {
   margin-bottom: 16px;
   border-color: rgba(251, 191, 36, 0.4);
   background: rgba(120, 53, 15, 0.2);
+}
+
+.battle-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.battle-timer {
+  padding: 8px 10px;
+  border-radius: 999px;
+  color: #111827;
+  background: #fbbf24;
+  font-size: 14px;
+}
+
+.battle-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.battle-stat {
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.battle-stat span {
+  display: block;
+  margin-bottom: 5px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.battle-stat strong {
+  color: #f8fafc;
+  font-size: 14px;
+  text-transform: capitalize;
 }
 
 @media (max-width: 420px) {
@@ -353,7 +395,8 @@ button {
     align-items: flex-start;
   }
 
-  .status-grid {
+  .status-grid,
+  .battle-stats-grid {
     grid-template-columns: 1fr;
   }
 }
