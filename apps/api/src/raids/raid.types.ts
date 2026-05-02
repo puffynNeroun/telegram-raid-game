@@ -1,7 +1,15 @@
 export const RAID_TTL_SECONDS = 120;
 export const MAX_PLAYERS_PER_RAID = 6;
 
+export const BATTLE_DURATION_SECONDS = 60;
+export const BATTLE_RESULT_TTL_SECONDS = 120;
+export const BASE_BOSS_HP = 1000;
+
 export type RaidStatus = "lobby" | "cancelled" | "battle" | "finished";
+
+export type BattleStatus = "active" | "finished";
+export type BattleOutcome = "win" | "lose" | null;
+export type BossPhase = "idle" | "hurt" | "rage" | "defeated";
 
 export type RaidPlayer = {
     telegramUserId: string;
@@ -9,6 +17,41 @@ export type RaidPlayer = {
     isHost: boolean;
     isReady: boolean;
     joinedAt: number;
+};
+
+export type BattleBossState = {
+    id: string;
+    name: string;
+    hp: number;
+    maxHp: number;
+    phase: BossPhase;
+};
+
+export type BattlePlayerState = {
+    telegramUserId: string;
+    displayName: string;
+    hp: number;
+    maxHp: number;
+    combo: number;
+    maxCombo: number;
+    damage: number;
+    perfectCount: number;
+    goodCount: number;
+    missCount: number;
+    wrongCount: number;
+    deaths: number;
+    isStunned: boolean;
+    stunnedUntil: number | null;
+};
+
+export type BattleState = {
+    status: BattleStatus;
+    outcome: BattleOutcome;
+    startedAt: number;
+    endsAt: number;
+    durationSeconds: number;
+    boss: BattleBossState;
+    players: Record<string, BattlePlayerState>;
 };
 
 export type Raid = {
@@ -20,6 +63,7 @@ export type Raid = {
     createdAt: number;
     expiresAt: number;
     players: Record<string, RaidPlayer>;
+    battle: BattleState | null;
 };
 
 export type CreateRaidInput = {
