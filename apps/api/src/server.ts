@@ -1,9 +1,11 @@
+import { createServer } from "node:http";
 import { Redis } from "ioredis";
 import { env } from "./config/env.js";
 import { createApp } from "./app.js";
 import { RaidRepository } from "./raids/raid.repository.js";
 import { RaidService } from "./raids/raid.service.js";
 import { startTelegramBot, type TelegramBotRuntime } from "./bot/bot.js";
+import { setupSocketServer } from "./socket/socket.js";
 
 const redis = new Redis(env.redisUrl, {
     maxRetriesPerRequest: 3,
@@ -22,10 +24,15 @@ const raidRepository = new RaidRepository(redis);
 const raidService = new RaidService(raidRepository);
 
 const app = createApp({ redis, raidService });
+const httpServer = createServer(app);
+const socketServer = setupSocketServer({
+    httpServer,
+    raidService
+});
 
 let telegramBot: TelegramBotRuntime | null = null;
 
-const server = app.listen(env.apiPort, () => {
+httpServer.listen(env.apiPort, () => {
     console.log(`[api] running on http://localhost:${env.apiPort}`);
 });
 
@@ -54,7 +61,11 @@ function shutdown(signal: string) {
 
     telegramBot?.stop(signal);
 
-    server.close(() => {
+    socketServer.close(() => {
+        console.log("[socket] server closed");
+    });
+
+    httpServer.close(() => {
         void redis.quit().finally(() => {
             process.exit(0);
         });
