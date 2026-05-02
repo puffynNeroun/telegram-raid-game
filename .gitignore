@@ -1,0 +1,12 @@
+cat > .gitignore <<'EOF'
+node_modules
+.pnpm-store
+dist
+build
+.env
+.env.local
+.idea
+.vscode
+coverage
+.DS_Store
+EOF
