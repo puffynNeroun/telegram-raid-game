@@ -33,7 +33,12 @@ export class RaidRepository {
     async saveRaid(raid: Raid): Promise<void> {
         const ttlSeconds = Math.max(1, Math.ceil((raid.expiresAt - Date.now()) / 1000));
 
-        await this.redis.set(this.raidKey(raid.id), JSON.stringify(raid), "EX", ttlSeconds);
+        await this.redis.set(
+            this.raidKey(raid.id),
+            JSON.stringify(raid),
+            "EX",
+            ttlSeconds
+        );
     }
 
     async getRaid(raidId: string): Promise<Raid | null> {
