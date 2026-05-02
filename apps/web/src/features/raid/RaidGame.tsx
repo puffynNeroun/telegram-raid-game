@@ -37,6 +37,10 @@ export function RaidGame() {
         ? Math.max(0, Math.min(100, (battle.boss.hp / battle.boss.maxHp) * 100))
         : 100;
 
+    const battleTimeLeft = battle
+        ? formatTimeLeft(battle.endsAt, localNow)
+        : null;
+
     useEffect(() => {
         initTelegramWebApp();
     }, []);
@@ -153,10 +157,10 @@ export function RaidGame() {
                             </div>
 
                             <div className="status-box">
-                                <span>{battle ? "Battle ends" : "Expires"}</span>
+                                <span>{battle ? getBattleTimeLabel(battle.status) : "Expires"}</span>
                                 <strong>
                                     {battle
-                                        ? formatTimeLeft(battle.endsAt, localNow)
+                                        ? battleTimeLeft
                                         : formatTimeLeft(raidState.raid.expiresAt, localNow)}
                                 </strong>
                             </div>
@@ -166,13 +170,13 @@ export function RaidGame() {
                             <section className="panel battle-panel">
                                 <div className="battle-header">
                                     <div>
-                                        <h3>Battle active</h3>
-                                        <p className="muted small">Server-side battle state is live.</p>
+                                        <h3>{getBattleTitle(battle.status, battle.outcome)}</h3>
+                                        <p className="muted small">
+                                            {getBattleDescription(battle.status, battle.outcome)}
+                                        </p>
                                     </div>
 
-                                    <strong className="battle-timer">
-                                        {formatTimeLeft(battle.endsAt, localNow)}
-                                    </strong>
+                                    <strong className="battle-timer">{battleTimeLeft}</strong>
                                 </div>
 
                                 <div className="battle-stats-grid">
@@ -237,7 +241,11 @@ export function RaidGame() {
                                                 </div>
                                             </div>
 
-                                            <strong className={battlePlayer ? "ready" : player.isReady ? "ready" : "not-ready"}>
+                                            <strong
+                                                className={
+                                                    battlePlayer ? "ready" : player.isReady ? "ready" : "not-ready"
+                                                }
+                                            >
                                                 {battlePlayer
                                                     ? `${battlePlayer.damage} dmg`
                                                     : player.isReady
@@ -305,4 +313,46 @@ export function RaidGame() {
             </section>
         </main>
     );
+}
+
+function getBattleTimeLabel(status: "active" | "finished"): string {
+    return status === "finished" ? "Battle ended" : "Battle ends";
+}
+
+function getBattleTitle(
+    status: "active" | "finished",
+    outcome: "win" | "lose" | null
+): string {
+    if (status === "active") {
+        return "Battle active";
+    }
+
+    if (outcome === "win") {
+        return "Boss defeated";
+    }
+
+    if (outcome === "lose") {
+        return "Raid failed";
+    }
+
+    return "Battle finished";
+}
+
+function getBattleDescription(
+    status: "active" | "finished",
+    outcome: "win" | "lose" | null
+): string {
+    if (status === "active") {
+        return "Server-side battle state is live.";
+    }
+
+    if (outcome === "win") {
+        return "The team defeated the boss before the timer expired.";
+    }
+
+    if (outcome === "lose") {
+        return "The timer expired before the boss was defeated.";
+    }
+
+    return "The battle has ended.";
 }
