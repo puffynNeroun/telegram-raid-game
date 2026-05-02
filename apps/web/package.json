@@ -1,15 +1,17 @@
 {
-  "name": "web",
+  "name": "@raid-game/web",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@raid-game/shared": "workspace:*",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
