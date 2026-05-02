@@ -5,6 +5,7 @@ import type { RaidService } from "../raids/raid.service.js";
 import type { Raid } from "../raids/raid.types.js";
 import type {
     ClientToServerEvents,
+    JoinPlayerPayload,
     JoinRaidRoomPayload,
     PlayerReadyPayload,
     ServerToClientEvents,
@@ -63,6 +64,32 @@ export function setupSocketServer({
             });
 
             emitRaidStateToSocket(socket, raid);
+        });
+
+        socket.on("player:join", async (payload) => {
+            const parsedPayload = parseJoinPlayerPayload(payload);
+
+            if (!parsedPayload) {
+                emitSocketError(socket, {
+                    code: "invalid_payload",
+                    message: "raidId, telegramUserId and displayName are required"
+                });
+                return;
+            }
+
+            const result = await raidService.joinRaid(parsedPayload);
+
+            if (!result.ok) {
+                emitSocketError(socket, {
+                    code: result.reason,
+                    message: result.reason
+                });
+                return;
+            }
+
+            await socket.join(getRaidRoomName(result.raid.id));
+
+            emitRaidStateToRoom(io, result.raid);
         });
 
         socket.on("player:ready", async (payload) => {
@@ -156,6 +183,42 @@ function getValidRaidId(payload: JoinRaidRoomPayload): string | null {
     const raidId = payload.raidId.trim();
 
     return raidId.length > 0 ? raidId : null;
+}
+
+function parseJoinPlayerPayload(payload: JoinPlayerPayload): JoinPlayerPayload | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    if (typeof payload.raidId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.telegramUserId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.displayName !== "string") {
+        return null;
+    }
+
+    const raidId = payload.raidId.trim();
+    const telegramUserId = payload.telegramUserId.trim();
+    const displayName = payload.displayName.trim();
+
+    if (!raidId || !telegramUserId || !displayName) {
+        return null;
+    }
+
+    if (displayName.length > 64) {
+        return null;
+    }
+
+    return {
+        raidId,
+        telegramUserId,
+        displayName
+    };
 }
 
 function parsePlayerReadyPayload(

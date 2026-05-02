@@ -4,6 +4,12 @@ export type JoinRaidRoomPayload = {
     raidId: string;
 };
 
+export type JoinPlayerPayload = {
+    raidId: string;
+    telegramUserId: string;
+    displayName: string;
+};
+
 export type PlayerReadyPayload = {
     raidId: string;
     telegramUserId: string;
@@ -27,6 +33,7 @@ export type SocketErrorPayload = {
 
 export type ClientToServerEvents = {
     "raid:joinRoom": (payload: JoinRaidRoomPayload) => void;
+    "player:join": (payload: JoinPlayerPayload) => void;
     "player:ready": (payload: PlayerReadyPayload) => void;
     "raid:start": (payload: StartRaidPayload) => void;
 };
