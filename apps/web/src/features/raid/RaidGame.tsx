@@ -34,7 +34,7 @@ export function RaidGame() {
     const battle = raid?.battle ?? null;
 
     const bossHpPercent = battle
-        ? Math.max(0, Math.min(100, (battle.boss.hp / battle.boss.maxHp) * 100))
+        ? getBossHpPercent(battle.boss.hp, battle.boss.maxHp)
         : 100;
 
     const battleTimeLeft = battle
@@ -51,6 +51,7 @@ export function RaidGame() {
                 <section className="game-card">
                     <p className="eyebrow">Raid Boss</p>
                     <h1>No raid selected</h1>
+
                     <p className="muted">
                         Open the app from the Telegram Join Raid link, or add a raidId to the URL.
                     </p>
@@ -84,6 +85,7 @@ export function RaidGame() {
                     <div className="boss-info">
                         <div className="boss-row">
                             <h2>{battle?.boss.name ?? "Meme Boss"}</h2>
+
                             <span>
                 {battle
                     ? `${battle.boss.hp}/${battle.boss.maxHp} HP`
@@ -167,16 +169,29 @@ export function RaidGame() {
                         </section>
 
                         {battle && (
-                            <section className="panel battle-panel">
+                            <section
+                                className={getBattlePanelClassName(
+                                    battle.status,
+                                    battle.outcome
+                                )}
+                            >
                                 <div className="battle-header">
                                     <div>
                                         <h3>{getBattleTitle(battle.status, battle.outcome)}</h3>
+
                                         <p className="muted small">
                                             {getBattleDescription(battle.status, battle.outcome)}
                                         </p>
                                     </div>
 
-                                    <strong className="battle-timer">{battleTimeLeft}</strong>
+                                    <strong
+                                        className={getBattleTimerClassName(
+                                            battle.status,
+                                            battle.outcome
+                                        )}
+                                    >
+                                        {battleTimeLeft}
+                                    </strong>
                                 </div>
 
                                 <div className="battle-stats-grid">
@@ -204,6 +219,7 @@ export function RaidGame() {
                             <div className="panel-header">
                                 <div>
                                     <h3>Players</h3>
+
                                     <p className="muted small">
                                         {battle ? "Battle player state." : "Realtime Redis lobby state."}
                                     </p>
@@ -231,6 +247,7 @@ export function RaidGame() {
 
                                                 <div>
                                                     <strong>{player.displayName}</strong>
+
                                                     <span>
                             {player.isHost ? "Host" : "Player"}
                                                         {player.telegramUserId === currentUser.id ? " · You" : ""}
@@ -315,8 +332,49 @@ export function RaidGame() {
     );
 }
 
+function getBossHpPercent(currentHp: number, maxHp: number): number {
+    if (maxHp <= 0) {
+        return 0;
+    }
+
+    return Math.max(0, Math.min(100, (currentHp / maxHp) * 100));
+}
+
 function getBattleTimeLabel(status: "active" | "finished"): string {
     return status === "finished" ? "Battle ended" : "Battle ends";
+}
+
+function getBattlePanelClassName(
+    status: "active" | "finished",
+    outcome: "win" | "lose" | null
+): string {
+    return `panel battle-panel ${getBattleStateClassName(status, outcome)}`;
+}
+
+function getBattleTimerClassName(
+    status: "active" | "finished",
+    outcome: "win" | "lose" | null
+): string {
+    return `battle-timer ${getBattleStateClassName(status, outcome)}`;
+}
+
+function getBattleStateClassName(
+    status: "active" | "finished",
+    outcome: "win" | "lose" | null
+): string {
+    if (status !== "finished") {
+        return "";
+    }
+
+    if (outcome === "win") {
+        return "is-win";
+    }
+
+    if (outcome === "lose") {
+        return "is-lose";
+    }
+
+    return "is-finished";
 }
 
 function getBattleTitle(
