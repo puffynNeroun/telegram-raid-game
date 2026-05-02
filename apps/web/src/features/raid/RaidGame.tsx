@@ -32,6 +32,12 @@ type TelegramUser = {
     last_name?: string;
 };
 
+type CurrentUser = {
+    id: string;
+    displayName: string;
+    source: "telegram" | "dev" | "local";
+};
+
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 export function RaidGame() {
@@ -39,9 +45,22 @@ export function RaidGame() {
     const raidId = params.get("raidId");
     const chatId = params.get("chatId");
 
+    const currentUser = useMemo(() => getCurrentUser(params), [params]);
+
     const [raidState, setRaidState] = useState<RaidState>({ status: "idle" });
     const [isJoining, setIsJoining] = useState(false);
+    const [isReadyUpdating, setIsReadyUpdating] = useState(false);
+    const [isStarting, setIsStarting] = useState(false);
     const [localNow, setLocalNow] = useState(Date.now());
+
+    const raid = raidState.status === "loaded" ? raidState.raid : null;
+    const currentPlayer = raid?.players[currentUser.id] ?? null;
+    const players = raid ? Object.values(raid.players) : [];
+    const readyPlayersCount = players.filter((player) => player.isReady).length;
+
+    const canStart = Boolean(
+        raid?.status === "lobby" && currentPlayer?.isHost && readyPlayersCount >= 1
+    );
 
     useEffect(() => {
         window.Telegram?.WebApp?.ready?.();
@@ -98,24 +117,14 @@ export function RaidGame() {
         setIsJoining(true);
 
         try {
-            const telegramUser = getTelegramUser();
-            const fallbackUser = getOrCreateFallbackUser();
-
-            const telegramUserId = telegramUser?.id
-                ? String(telegramUser.id)
-                : fallbackUser.id;
-
-            const displayName =
-                getTelegramDisplayName(telegramUser) ?? fallbackUser.displayName;
-
             const response = await fetch(`${apiUrl}/raids/${raidId}/join`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    telegramUserId,
-                    displayName
+                    telegramUserId: currentUser.id,
+                    displayName: currentUser.displayName
                 })
             });
 
@@ -140,6 +149,85 @@ export function RaidGame() {
         }
     }
 
+    async function setReady(isReady: boolean) {
+        if (!raidId) {
+            return;
+        }
+
+        setIsReadyUpdating(true);
+
+        try {
+            const response = await fetch(`${apiUrl}/raids/${raidId}/ready`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    telegramUserId: currentUser.id,
+                    isReady
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error ?? `API returned ${response.status}`);
+            }
+
+            setRaidState({
+                status: "loaded",
+                raid: data.raid as Raid,
+                serverTime: Date.now()
+            });
+        } catch (error) {
+            setRaidState({
+                status: "error",
+                message: error instanceof Error ? error.message : "Unknown error"
+            });
+        } finally {
+            setIsReadyUpdating(false);
+        }
+    }
+
+    async function startRaid() {
+        if (!raidId) {
+            return;
+        }
+
+        setIsStarting(true);
+
+        try {
+            const response = await fetch(`${apiUrl}/raids/${raidId}/start`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    telegramUserId: currentUser.id
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error ?? `API returned ${response.status}`);
+            }
+
+            setRaidState({
+                status: "loaded",
+                raid: data.raid as Raid,
+                serverTime: Date.now()
+            });
+        } catch (error) {
+            setRaidState({
+                status: "error",
+                message: error instanceof Error ? error.message : "Unknown error"
+            });
+        } finally {
+            setIsStarting(false);
+        }
+    }
+
     if (!raidId) {
         return (
             <main className="app-shell">
@@ -147,8 +235,7 @@ export function RaidGame() {
                     <p className="eyebrow">Raid Boss</p>
                     <h1>No raid selected</h1>
                     <p className="muted">
-                        Open the app from the Telegram Join Raid button, or add a raidId to
-                        the URL.
+                        Open the app from the Telegram Join Raid link, or add a raidId to the URL.
                     </p>
 
                     <div className="debug-panel">
@@ -180,7 +267,9 @@ export function RaidGame() {
                     <div className="boss-info">
                         <div className="boss-row">
                             <h2>Meme Boss</h2>
-                            <span>Lobby phase</span>
+                            <span>
+                {raid?.status === "battle" ? "Battle started" : "Lobby phase"}
+              </span>
                         </div>
 
                         <div className="hp-bar" aria-label="Boss health">
@@ -199,6 +288,14 @@ export function RaidGame() {
                             Chat ID: <span>{chatId}</span>
                         </p>
                     )}
+
+                    <p>
+                        You: <span>{currentUser.displayName}</span>
+                    </p>
+
+                    <p>
+                        User source: <span>{currentUser.source}</span>
+                    </p>
                 </div>
 
                 {raidState.status === "loading" && (
@@ -225,7 +322,7 @@ export function RaidGame() {
 
                             <div className="status-box">
                                 <span>Players</span>
-                                <strong>{Object.keys(raidState.raid.players).length}/6</strong>
+                                <strong>{players.length}/6</strong>
                             </div>
 
                             <div className="status-box">
@@ -233,6 +330,16 @@ export function RaidGame() {
                                 <strong>{formatTimeLeft(raidState.raid.expiresAt, localNow)}</strong>
                             </div>
                         </section>
+
+                        {raidState.raid.status === "battle" && (
+                            <section className="panel battle-placeholder">
+                                <h3>Battle started</h3>
+                                <p className="muted">
+                                    The raid moved to battle state. Next step: Socket.IO room sync
+                                    and battle prototype.
+                                </p>
+                            </section>
+                        )}
 
                         <section className="panel">
                             <div className="panel-header">
@@ -251,7 +358,7 @@ export function RaidGame() {
                             </div>
 
                             <div className="player-list">
-                                {Object.values(raidState.raid.players).map((player) => (
+                                {players.map((player) => (
                                     <div className="player-row" key={player.telegramUserId}>
                                         <div className="player-main">
                       <span className="avatar">
@@ -260,7 +367,10 @@ export function RaidGame() {
 
                                             <div>
                                                 <strong>{player.displayName}</strong>
-                                                <span>{player.isHost ? "Host" : "Player"}</span>
+                                                <span>
+                          {player.isHost ? "Host" : "Player"}
+                                                    {player.telegramUserId === currentUser.id ? " · You" : ""}
+                        </span>
                                             </div>
                                         </div>
 
@@ -272,14 +382,56 @@ export function RaidGame() {
                             </div>
                         </section>
 
-                        <button
-                            className="primary-button"
-                            type="button"
-                            disabled={isJoining}
-                            onClick={joinRaid}
-                        >
-                            {isJoining ? "Joining..." : "Join Lobby"}
-                        </button>
+                        {raidState.raid.status === "lobby" && (
+                            <div className="action-stack">
+                                {!currentPlayer && (
+                                    <button
+                                        className="primary-button"
+                                        type="button"
+                                        disabled={isJoining}
+                                        onClick={joinRaid}
+                                    >
+                                        {isJoining ? "Joining..." : "Join Lobby"}
+                                    </button>
+                                )}
+
+                                {currentPlayer && (
+                                    <button
+                                        className="primary-button"
+                                        type="button"
+                                        disabled={isReadyUpdating}
+                                        onClick={() => setReady(!currentPlayer.isReady)}
+                                    >
+                                        {isReadyUpdating
+                                            ? "Updating..."
+                                            : currentPlayer.isReady
+                                                ? "Unready"
+                                                : "Ready"}
+                                    </button>
+                                )}
+
+                                {currentPlayer?.isHost && (
+                                    <button
+                                        className="secondary-button"
+                                        type="button"
+                                        disabled={!canStart || isStarting}
+                                        onClick={startRaid}
+                                    >
+                                        {isStarting ? "Starting..." : "Start Raid"}
+                                    </button>
+                                )}
+
+                                {currentPlayer?.isHost && !canStart && (
+                                    <p className="hint-text">
+                                        At least one player must be ready before starting.
+                                    </p>
+                                )}
+
+                                {!currentPlayer?.isHost && currentPlayer && (
+                                    <p className="hint-text">Waiting for host to start the raid.</p>
+                                )}
+                            </div>
+                        )}
                     </>
                 )}
             </section>
@@ -293,6 +445,38 @@ function formatTimeLeft(expiresAt: number, now: number): string {
     const restSeconds = seconds % 60;
 
     return `${minutes}:${String(restSeconds).padStart(2, "0")}`;
+}
+
+function getCurrentUser(params: URLSearchParams): CurrentUser {
+    const devUserId = params.get("devUserId");
+    const devName = params.get("devName");
+
+    if (devUserId && devName) {
+        return {
+            id: devUserId,
+            displayName: devName,
+            source: "dev"
+        };
+    }
+
+    const telegramUser = getTelegramUser();
+    const telegramDisplayName = getTelegramDisplayName(telegramUser);
+
+    if (telegramUser?.id && telegramDisplayName) {
+        return {
+            id: String(telegramUser.id),
+            displayName: telegramDisplayName,
+            source: "telegram"
+        };
+    }
+
+    const fallbackUser = getOrCreateFallbackUser();
+
+    return {
+        id: fallbackUser.id,
+        displayName: fallbackUser.displayName,
+        source: "local"
+    };
 }
 
 function getTelegramUser(): TelegramUser | null {

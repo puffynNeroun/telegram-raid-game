@@ -55,3 +55,45 @@ export type JoinRaidResult =
     ok: false;
     reason: "raid_not_found" | "raid_expired" | "raid_not_joinable" | "raid_full";
 };
+
+export type SetReadyInput = {
+    raidId: string;
+    telegramUserId: string;
+    isReady: boolean;
+};
+
+export type SetReadyResult =
+    | {
+    ok: true;
+    raid: Raid;
+    player: RaidPlayer;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "raid_expired"
+        | "raid_not_joinable"
+        | "player_not_in_raid";
+};
+
+export type StartRaidInput = {
+    raidId: string;
+    telegramUserId: string;
+};
+
+export type StartRaidResult =
+    | {
+    ok: true;
+    raid: Raid;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "raid_expired"
+        | "raid_not_joinable"
+        | "player_not_in_raid"
+        | "only_host_can_start"
+        | "no_ready_players";
+};

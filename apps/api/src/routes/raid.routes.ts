@@ -53,14 +53,7 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
         });
 
         if (!result.ok) {
-            const statusCodeByReason = {
-                raid_not_found: 404,
-                raid_expired: 410,
-                raid_not_joinable: 409,
-                raid_full: 409
-            } satisfies Record<typeof result.reason, number>;
-
-            res.status(statusCodeByReason[result.reason]).json({
+            res.status(getStatusCodeByReason(result.reason)).json({
                 ok: false,
                 error: result.reason
             });
@@ -74,5 +67,82 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
         });
     });
 
+    router.post("/raids/:raidId/ready", async (req, res) => {
+        const telegramUserId = String(req.body?.telegramUserId ?? "").trim();
+        const isReady = Boolean(req.body?.isReady);
+
+        if (!telegramUserId) {
+            res.status(400).json({
+                ok: false,
+                error: "telegramUserId is required"
+            });
+            return;
+        }
+
+        const result = await raidService.setReady({
+            raidId: req.params.raidId,
+            telegramUserId,
+            isReady
+        });
+
+        if (!result.ok) {
+            res.status(getStatusCodeByReason(result.reason)).json({
+                ok: false,
+                error: result.reason
+            });
+            return;
+        }
+
+        res.json({
+            ok: true,
+            raid: result.raid,
+            player: result.player
+        });
+    });
+
+    router.post("/raids/:raidId/start", async (req, res) => {
+        const telegramUserId = String(req.body?.telegramUserId ?? "").trim();
+
+        if (!telegramUserId) {
+            res.status(400).json({
+                ok: false,
+                error: "telegramUserId is required"
+            });
+            return;
+        }
+
+        const result = await raidService.startRaid({
+            raidId: req.params.raidId,
+            telegramUserId
+        });
+
+        if (!result.ok) {
+            res.status(getStatusCodeByReason(result.reason)).json({
+                ok: false,
+                error: result.reason
+            });
+            return;
+        }
+
+        res.json({
+            ok: true,
+            raid: result.raid
+        });
+    });
+
     return router;
+}
+
+function getStatusCodeByReason(reason: string): number {
+    const statusCodeByReason: Record<string, number> = {
+        raid_not_found: 404,
+        raid_expired: 410,
+        raid_not_joinable: 409,
+        raid_full: 409,
+        player_not_in_raid: 403,
+        only_host_can_start: 403,
+        no_ready_players: 409
+    };
+
+    return statusCodeByReason[reason] ?? 400;
 }

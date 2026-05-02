@@ -277,6 +277,7 @@ button {
 }
 
 .primary-button,
+.secondary-button,
 .ghost-button {
   border: 0;
   cursor: pointer;
@@ -293,9 +294,18 @@ button {
   background: linear-gradient(135deg, #fb7185, #f97316);
 }
 
-.primary-button:disabled {
+.primary-button:disabled,
+.secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.secondary-button {
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: 18px;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .ghost-button {
@@ -303,6 +313,26 @@ button {
   border-radius: 999px;
   color: #e2e8f0;
   background: rgba(255, 255, 255, 0.1);
+}
+
+.action-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hint-text {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.battle-placeholder {
+  margin-bottom: 16px;
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(120, 53, 15, 0.2);
 }
 
 @media (max-width: 420px) {

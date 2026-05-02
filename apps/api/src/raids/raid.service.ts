@@ -4,7 +4,11 @@ import type {
     CreateRaidResult,
     JoinRaidInput,
     JoinRaidResult,
-    Raid
+    Raid,
+    SetReadyInput,
+    SetReadyResult,
+    StartRaidInput,
+    StartRaidResult
 } from "./raid.types.js";
 import { MAX_PLAYERS_PER_RAID, RAID_TTL_SECONDS } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
@@ -68,17 +72,12 @@ export class RaidService {
             };
         }
 
-        if (Date.now() >= raid.expiresAt) {
-            return {
-                ok: false,
-                reason: "raid_expired"
-            };
-        }
+        const lobbyValidationError = this.validateLobbyRaid(raid);
 
-        if (raid.status !== "lobby") {
+        if (lobbyValidationError) {
             return {
                 ok: false,
-                reason: "raid_not_joinable"
+                reason: lobbyValidationError
             };
         }
 
@@ -124,5 +123,128 @@ export class RaidService {
             raid: updatedRaid,
             player
         };
+    }
+
+    async setReady(input: SetReadyInput): Promise<SetReadyResult> {
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        const lobbyValidationError = this.validateLobbyRaid(raid);
+
+        if (lobbyValidationError) {
+            return {
+                ok: false,
+                reason: lobbyValidationError
+            };
+        }
+
+        const player = raid.players[input.telegramUserId];
+
+        if (!player) {
+            return {
+                ok: false,
+                reason: "player_not_in_raid"
+            };
+        }
+
+        const updatedPlayer = {
+            ...player,
+            isReady: input.isReady
+        };
+
+        const updatedRaid: Raid = {
+            ...raid,
+            players: {
+                ...raid.players,
+                [input.telegramUserId]: updatedPlayer
+            }
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid,
+            player: updatedPlayer
+        };
+    }
+
+    async startRaid(input: StartRaidInput): Promise<StartRaidResult> {
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        const lobbyValidationError = this.validateLobbyRaid(raid);
+
+        if (lobbyValidationError) {
+            return {
+                ok: false,
+                reason: lobbyValidationError
+            };
+        }
+
+        const player = raid.players[input.telegramUserId];
+
+        if (!player) {
+            return {
+                ok: false,
+                reason: "player_not_in_raid"
+            };
+        }
+
+        if (!player.isHost) {
+            return {
+                ok: false,
+                reason: "only_host_can_start"
+            };
+        }
+
+        const hasReadyPlayer = Object.values(raid.players).some(
+            (raidPlayer) => raidPlayer.isReady
+        );
+
+        if (!hasReadyPlayer) {
+            return {
+                ok: false,
+                reason: "no_ready_players"
+            };
+        }
+
+        const updatedRaid: Raid = {
+            ...raid,
+            status: "battle"
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid
+        };
+    }
+
+    private validateLobbyRaid(
+        raid: Raid
+    ): "raid_expired" | "raid_not_joinable" | null {
+        if (Date.now() >= raid.expiresAt) {
+            return "raid_expired";
+        }
+
+        if (raid.status !== "lobby") {
+            return "raid_not_joinable";
+        }
+
+        return null;
     }
 }
