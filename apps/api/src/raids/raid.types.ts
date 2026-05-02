@@ -141,3 +141,14 @@ export type StartRaidResult =
         | "only_host_can_start"
         | "no_ready_players";
 };
+
+export type FinalizeExpiredBattleResult =
+    | {
+    ok: true;
+    raid: Raid;
+    finalized: boolean;
+}
+    | {
+    ok: false;
+    reason: "raid_not_found" | "no_active_battle" | "battle_not_expired";
+};

@@ -4,6 +4,7 @@ import type {
     BattleState,
     CreateRaidInput,
     CreateRaidResult,
+    FinalizeExpiredBattleResult,
     JoinRaidInput,
     JoinRaidResult,
     Raid,
@@ -250,6 +251,67 @@ export class RaidService {
         return {
             ok: true,
             raid: updatedRaid
+        };
+    }
+
+    async finalizeExpiredBattle(
+        raidId: string
+    ): Promise<FinalizeExpiredBattleResult> {
+        const raid = await this.raidRepository.getRaid(raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        if (raid.status !== "battle" || !raid.battle) {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        if (raid.battle.status !== "active") {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        if (Date.now() < raid.battle.endsAt) {
+            return {
+                ok: false,
+                reason: "battle_not_expired"
+            };
+        }
+
+        const updatedRaid: Raid = {
+            ...raid,
+            status: "finished",
+            battle: {
+                ...raid.battle,
+                status: "finished",
+                outcome: "lose",
+                boss: {
+                    ...raid.battle.boss,
+                    phase:
+                        raid.battle.boss.hp <= 0
+                            ? "defeated"
+                            : raid.battle.boss.hp <= raid.battle.boss.maxHp * 0.3
+                                ? "rage"
+                                : raid.battle.boss.phase
+                }
+            }
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid,
+            finalized: true
         };
     }
 
