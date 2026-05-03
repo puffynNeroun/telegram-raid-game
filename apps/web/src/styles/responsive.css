@@ -1,0 +1,169 @@
+/* Responsive rules for shared raid screens. */
+
+@media (max-width: 420px) {
+  .app-shell {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .game-card {
+    border-radius: 24px;
+  }
+
+  h1 {
+    font-size: 32px;
+  }
+
+  .boss-panel {
+    align-items: flex-start;
+  }
+
+  .status-grid,
+  .battle-stats-grid,
+  .player-combat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .current-note-target,
+  .current-note-empty {
+    min-height: 104px;
+  }
+
+  .current-note-symbol {
+    font-size: 52px;
+  }
+
+  .input-pad,
+  .note-list {
+    gap: 8px;
+  }
+
+  .input-button {
+    min-height: 76px;
+    border-radius: 18px;
+  }
+
+  .input-button-symbol {
+    font-size: 32px;
+  }
+
+  .note-chip {
+    min-height: 54px;
+    border-radius: 14px;
+  }
+
+  .note-symbol {
+    font-size: 24px;
+  }
+
+  .raid-prep-page {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .raid-prep-card {
+    width: 100%;
+    padding: 18px;
+    border-radius: 26px;
+  }
+
+  .raid-prep-header h1 {
+    font-size: 32px;
+  }
+
+  .raid-lobby-hero,
+  .raid-result-hero {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .raid-lobby-hero-state,
+  .raid-result-time-badge {
+    width: 100%;
+    text-align: left;
+  }
+
+  .raid-lobby-status-grid,
+  .raid-result-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .raid-lobby-status-card,
+  .raid-result-summary-card {
+    padding: 12px 10px;
+  }
+
+  .raid-lobby-status-card span,
+  .raid-result-summary-card span {
+    font-size: 10px;
+  }
+
+  .raid-lobby-status-card strong,
+  .raid-result-summary-card strong {
+    font-size: 14px;
+  }
+
+  .raid-lobby-squad-section,
+  .raid-lobby-action-dock,
+  .raid-result-breakdown,
+  .raid-result-players-section {
+    padding: 14px;
+    border-radius: 22px;
+  }
+
+  .raid-lobby-section-head h2,
+  .raid-result-section-head h2 {
+    font-size: 20px;
+  }
+
+  .raid-result-breakdown-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 370px) {
+  .raid-prep-card {
+    padding: 15px;
+  }
+
+  .raid-prep-header {
+    gap: 10px;
+  }
+
+  .raid-prep-header h1 {
+    font-size: 29px;
+  }
+
+  .raid-prep-header .status-pill {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .raid-lobby-boss-shell .boss-panel,
+  .raid-result-boss-shell .boss-panel {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .raid-lobby-boss-shell .boss-art,
+  .raid-result-boss-shell .boss-art {
+    width: 62px;
+    height: 62px;
+    font-size: 34px;
+  }
+
+  .raid-lobby-status-grid,
+  .raid-result-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .raid-lobby-status-card:last-child,
+  .raid-result-summary-card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .raid-result-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,106 @@
+/* Shared UI primitives: pills, buttons, hints, banners. */
+.status-pill {
+  padding: 9px 12px;
+  border: 1px solid rgba(251, 113, 133, 0.42);
+  border-radius: 999px;
+  background: rgba(244, 63, 94, 0.14);
+  color: #fecdd3;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: capitalize;
+}
+
+.game-error-banner {
+  margin-bottom: 16px;
+  padding: 11px 12px;
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  border-radius: 16px;
+  background: rgba(120, 53, 15, 0.28);
+  color: #fde68a;
+  font-size: 13px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.debug-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.45);
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.debug-panel code {
+  padding: 6px 8px;
+  overflow-wrap: anywhere;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+}
+
+.muted {
+  margin-bottom: 16px;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.small {
+  margin-bottom: 0;
+  font-size: 13px;
+}
+
+.primary-button,
+.secondary-button,
+.ghost-button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+}
+
+.primary-button {
+  width: 100%;
+  margin-top: 18px;
+  padding: 15px 18px;
+  border-radius: 18px;
+  color: #111827;
+  background: linear-gradient(135deg, #fb7185, #f97316);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.secondary-button {
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: 18px;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ghost-button {
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.action-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hint-text {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}

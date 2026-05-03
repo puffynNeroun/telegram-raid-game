@@ -1,0 +1,223 @@
+/* Premium result screen styles. */
+.raid-result-page {
+  background:
+          radial-gradient(circle at 50% -14%, rgba(74, 222, 128, 0.12), transparent 34rem),
+          radial-gradient(circle at 82% 6%, rgba(124, 58, 237, 0.16), transparent 28rem),
+          linear-gradient(180deg, #101827 0%, #02040a 100%);
+}
+
+.raid-result-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.raid-result-card::before {
+  content: "";
+  position: absolute;
+  inset: -120px -120px auto auto;
+  width: 220px;
+  height: 220px;
+  pointer-events: none;
+  border-radius: 999px;
+  background: rgba(74, 222, 128, 0.08);
+  filter: blur(6px);
+}
+
+.raid-result-card.is-lose::before {
+  background: rgba(248, 113, 113, 0.09);
+}
+
+.raid-result-header {
+  position: relative;
+  z-index: 1;
+}
+
+.raid-result-pill.is-win {
+  border-color: rgba(74, 222, 128, 0.32);
+  background: rgba(20, 83, 45, 0.28);
+  color: #bbf7d0;
+}
+
+.raid-result-pill.is-lose {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+.raid-result-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 24px;
+  background:
+          radial-gradient(circle at 0% 0%, rgba(74, 222, 128, 0.13), transparent 50%),
+          linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.56));
+}
+
+.raid-result-hero.is-lose {
+  background:
+          radial-gradient(circle at 0% 0%, rgba(248, 113, 113, 0.13), transparent 50%),
+          linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.56));
+}
+
+.raid-result-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -15% -60% 35%;
+  height: 120px;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(248, 250, 252, 0.08), transparent 68%);
+}
+
+.raid-result-emblem,
+.raid-result-hero-copy,
+.raid-result-time-badge {
+  position: relative;
+  z-index: 1;
+}
+
+.raid-result-emblem {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-radius: 20px;
+  background: rgba(20, 83, 45, 0.18);
+  font-size: 28px;
+}
+
+.raid-result-hero.is-lose .raid-result-emblem {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.raid-result-hero-copy span,
+.raid-result-time-badge span {
+  display: block;
+  margin-bottom: 6px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.raid-result-hero-copy h2 {
+  margin-bottom: 6px;
+  font-size: 24px;
+  letter-spacing: -0.04em;
+}
+
+.raid-result-hero-copy p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.raid-result-time-badge {
+  min-width: 72px;
+  padding: 10px 12px;
+  border: 1px solid rgba(74, 222, 128, 0.24);
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.38);
+  text-align: right;
+}
+
+.raid-result-hero.is-lose .raid-result-time-badge {
+  border-color: rgba(248, 113, 113, 0.24);
+}
+
+.raid-result-time-badge strong {
+  color: #f8fafc;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.raid-result-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.raid-result-summary-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.raid-result-summary-card span {
+  display: block;
+  margin-bottom: 7px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.raid-result-summary-card strong {
+  display: block;
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 16px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raid-result-breakdown {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 24px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.raid-result-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.raid-result-breakdown-grid article {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 17px;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.raid-result-breakdown-grid span {
+  display: block;
+  margin-bottom: 7px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.raid-result-breakdown-grid strong {
+  display: block;
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.raid-result-debug {
+  position: relative;
+  z-index: 1;
+}

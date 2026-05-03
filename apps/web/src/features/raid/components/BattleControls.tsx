@@ -4,27 +4,22 @@ import type { BattleInputKey } from "../types";
 
 const BATTLE_INPUT_CONTROLS: Array<{
     key: BattleInputKey;
-    label: string;
     keyboardLabel: string;
 }> = [
     {
         key: "left",
-        label: "←",
         keyboardLabel: "Left"
     },
     {
         key: "up",
-        label: "↑",
         keyboardLabel: "Up"
     },
     {
         key: "down",
-        label: "↓",
         keyboardLabel: "Down"
     },
     {
         key: "right",
-        label: "→",
         keyboardLabel: "Right"
     }
 ];
@@ -68,8 +63,11 @@ export function BattleControls({
     }, [canSendBattleInput, onBattleInput]);
 
     return (
-        <>
-            <div className="input-pad" aria-label="Battle input controls">
+        <section
+            className="battle-controls-panel"
+            aria-label="Battle input controls"
+        >
+            <div className="input-pad">
                 {BATTLE_INPUT_CONTROLS.map((control) => (
                     <button
                         className={`input-button input-button-${control.key}`}
@@ -79,9 +77,13 @@ export function BattleControls({
                         onClick={() => onBattleInput(control.key)}
                         aria-label={`Send ${control.keyboardLabel} input`}
                     >
-                        <span className="input-button-symbol">{control.label}</span>
+                        <span className="input-button-symbol" aria-hidden="true">
+                            <DirectionGlyph direction={control.key} />
+                        </span>
 
-                        <span className="input-button-label">{control.keyboardLabel}</span>
+                        <span className="input-button-label">
+                            {control.keyboardLabel}
+                        </span>
                     </button>
                 ))}
             </div>
@@ -91,6 +93,33 @@ export function BattleControls({
                     ? "Syncing input with server..."
                     : "Hit the current target. Keyboard: arrows or WASD."}
             </p>
-        </>
+        </section>
+    );
+}
+
+function DirectionGlyph({ direction }: { direction: BattleInputKey }) {
+    const paths: Record<BattleInputKey, string> = {
+        left: "M19 12H5M11 6l-6 6 6 6",
+        up: "M12 19V5M6 11l6-6 6 6",
+        down: "M12 5v14M6 13l6 6 6-6",
+        right: "M5 12h14M13 6l6 6-6 6"
+    };
+
+    return (
+        <svg
+            className="direction-glyph"
+            viewBox="0 0 24 24"
+            fill="none"
+            focusable="false"
+            aria-hidden="true"
+        >
+            <path
+                d={paths[direction]}
+                stroke="currentColor"
+                strokeWidth="2.35"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
     );
 }
