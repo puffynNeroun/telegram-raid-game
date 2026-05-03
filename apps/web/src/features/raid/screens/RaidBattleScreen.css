@@ -1,0 +1,1060 @@
+.direction-glyph {
+    width: 1em;
+    height: 1em;
+    display: block;
+}
+
+.raid-battle-page {
+    width: 100%;
+    height: 100dvh;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    color: #f8fafc;
+    background:
+            radial-gradient(circle at 50% -16%, rgba(99, 102, 241, 0.12), transparent 32rem),
+            radial-gradient(circle at 14% 36%, rgba(15, 23, 42, 0.7), transparent 26rem),
+            linear-gradient(180deg, #070a12 0%, #02040a 100%);
+}
+
+.raid-battle-stage {
+    --raid-arena-image: none;
+
+    position: relative;
+    width: min(100%, 460px);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background-image:
+            linear-gradient(180deg, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.84) 46%, rgba(2, 4, 10, 0.97) 100%),
+            var(--raid-arena-image, none);
+    background-position: center, center;
+    background-size: auto, cover;
+    background-repeat: no-repeat, no-repeat;
+    box-shadow:
+            0 0 90px rgba(0, 0, 0, 0.74),
+            inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    isolation: isolate;
+}
+
+.raid-battle-stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+            radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.08), transparent 24%),
+            radial-gradient(circle at 50% 72%, transparent 32%, rgba(0, 0, 0, 0.64) 100%),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.52), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.52));
+}
+
+.raid-battle-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background:
+            linear-gradient(180deg, rgba(2, 4, 10, 0.18) 0%, transparent 26%, rgba(2, 4, 10, 0.28) 58%, rgba(2, 4, 10, 0.86) 100%);
+}
+
+.raid-battle-top-hud,
+.raid-boss-hud,
+.raid-arena,
+.raid-bottom-hud {
+    position: relative;
+    z-index: 10;
+}
+
+.raid-battle-top-hud {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: start;
+    gap: 8px;
+    padding: 10px 10px 5px;
+}
+
+.raid-battle-brand,
+.raid-battle-timer,
+.raid-battle-state,
+.raid-stat-card,
+.raid-rating-card,
+.raid-player-card,
+.raid-player-mini-stat,
+.raid-spectator-panel,
+.raid-input-dock {
+    border: 1px solid rgba(226, 232, 240, 0.14);
+    background:
+            linear-gradient(180deg, rgba(15, 23, 42, 0.54), rgba(2, 6, 23, 0.68));
+    box-shadow:
+            0 10px 28px rgba(0, 0, 0, 0.28),
+            inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(12px);
+}
+
+.raid-battle-brand {
+    min-height: 52px;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 17px;
+}
+
+.raid-battle-mark {
+    color: #f8fafc;
+    font-size: 21px;
+    font-weight: 1000;
+    line-height: 1;
+    letter-spacing: 0.01em;
+}
+
+.raid-battle-brand strong {
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.raid-battle-timer {
+    min-width: 94px;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 8px 11px;
+    border-radius: 999px;
+}
+
+.raid-battle-timer span,
+.raid-battle-state span {
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.raid-battle-timer strong {
+    color: #f8fafc;
+    font-size: 24px;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.raid-battle-state {
+    min-height: 52px;
+    display: grid;
+    justify-items: end;
+    align-content: center;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 17px;
+    text-align: right;
+}
+
+.raid-battle-state strong {
+    color: #f8fafc;
+    font-size: 13px;
+    font-weight: 950;
+    text-transform: capitalize;
+}
+
+.raid-battle-error {
+    position: relative;
+    z-index: 30;
+    margin: 0 10px 5px;
+    padding: 8px 10px;
+    border: 1px solid rgba(248, 113, 113, 0.36);
+    border-radius: 14px;
+    background: rgba(69, 10, 10, 0.62);
+    color: #fecaca;
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.raid-boss-hud {
+    flex: 0 0 auto;
+    display: grid;
+    gap: 5px;
+    padding: 0 12px 4px;
+    text-align: center;
+}
+
+.raid-boss-title {
+    display: grid;
+    justify-items: center;
+    gap: 1px;
+}
+
+.raid-boss-title span {
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.raid-boss-title h1 {
+    margin: 0;
+    color: #f8fafc;
+    font-size: clamp(27px, 7vw, 38px);
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
+    text-shadow:
+            0 3px 18px rgba(0, 0, 0, 0.42),
+            0 0 22px rgba(15, 23, 42, 0.5);
+}
+
+.raid-boss-title strong {
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.raid-boss-health-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 7px;
+}
+
+.raid-boss-health-row > strong {
+    min-width: 42px;
+    color: #f8fafc;
+    font-size: 16px;
+    font-weight: 950;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.raid-boss-hp-bar {
+    height: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(15, 23, 42, 0.86);
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.84);
+    box-shadow:
+            0 0 0 1px rgba(148, 163, 184, 0.14),
+            inset 0 2px 6px rgba(0, 0, 0, 0.48);
+}
+
+.raid-boss-hp-fill {
+    height: 100%;
+    border-radius: inherit;
+    background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 46%),
+            linear-gradient(90deg, #fb7185 0%, #f97316 60%, #ef4444 100%);
+    transition: width 180ms ease;
+}
+
+.raid-boss-hud p {
+    margin: 0;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 850;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+}
+
+.raid-arena {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.raid-arena-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+            radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.055), transparent 25%),
+            linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.18) 42%, rgba(0, 0, 0, 0.86) 100%);
+}
+
+.raid-boss-character-wrap {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    bottom: 82px;
+    z-index: 8;
+    width: min(76%, 340px);
+    transform: translateX(-50%);
+    display: grid;
+    place-items: end center;
+    pointer-events: none;
+}
+
+.raid-boss-character {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    filter:
+            drop-shadow(0 24px 28px rgba(0, 0, 0, 0.76))
+            drop-shadow(0 0 10px rgba(248, 250, 252, 0.04));
+    animation: raidBossIdle 3.8s ease-in-out infinite;
+    transform-origin: 50% 88%;
+    user-select: none;
+}
+
+.raid-boss-character-66 {
+    animation-duration: 3.4s;
+}
+
+.raid-boss-character-33 {
+    animation-name: raidBossEnraged;
+    animation-duration: 2.4s;
+}
+
+.raid-boss-character-0 {
+    opacity: 0.9;
+    animation: raidBossDefeated 3s ease-in-out infinite;
+}
+
+.raid-side-stats {
+    position: absolute;
+    z-index: 36;
+    display: grid;
+    gap: 7px;
+    width: 104px;
+    pointer-events: none;
+}
+
+.raid-side-stats-left {
+    left: 8px;
+    top: 28px;
+}
+
+.raid-side-stats-right {
+    right: 8px;
+    top: 34px;
+    justify-items: end;
+}
+
+.raid-stat-card,
+.raid-rating-card {
+    width: 100%;
+    padding: 8px 9px;
+    border-radius: 14px;
+}
+
+.raid-stat-card span,
+.raid-rating-card span {
+    display: block;
+    margin-bottom: 3px;
+    color: #94a3b8;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.raid-stat-card strong {
+    display: block;
+    color: #f8fafc;
+    font-size: 17px;
+    font-weight: 950;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.raid-stat-card-combo strong {
+    color: #f8fafc;
+    font-size: 25px;
+}
+
+.raid-rating-card strong {
+    display: block;
+    color: #f8fafc;
+    font-size: 18px;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.raid-rating-card.is-perfect strong {
+    color: #86efac;
+}
+
+.raid-rating-card.is-good strong {
+    color: #93c5fd;
+}
+
+.raid-rating-card.is-miss strong {
+    color: #fde68a;
+}
+
+.raid-rating-card.is-wrong strong {
+    color: #fca5a5;
+}
+
+.raid-note-highway {
+    position: absolute;
+    left: 50%;
+    inset-block: 6px 0;
+    z-index: 44;
+    width: calc(100% - 28px);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.raid-note-lane {
+    position: relative;
+    min-width: 0;
+    height: 100%;
+}
+
+.raid-note-string {
+    position: absolute;
+    left: 50%;
+    top: 5px;
+    bottom: 48px;
+    width: 1px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    opacity: 0.24;
+}
+
+.raid-note-lane-left .raid-note-string,
+.raid-note-lane-left .raid-lane-target,
+.raid-note-lane-left .raid-falling-note {
+    --lane-color: 244, 114, 182;
+}
+
+.raid-note-lane-up .raid-note-string,
+.raid-note-lane-up .raid-lane-target,
+.raid-note-lane-up .raid-falling-note {
+    --lane-color: 74, 222, 128;
+}
+
+.raid-note-lane-down .raid-note-string,
+.raid-note-lane-down .raid-lane-target,
+.raid-note-lane-down .raid-falling-note {
+    --lane-color: 96, 165, 250;
+}
+
+.raid-note-lane-right .raid-note-string,
+.raid-note-lane-right .raid-lane-target,
+.raid-note-lane-right .raid-falling-note {
+    --lane-color: 251, 191, 36;
+}
+
+.raid-note-lane-left .raid-note-string,
+.raid-note-lane-up .raid-note-string,
+.raid-note-lane-down .raid-note-string,
+.raid-note-lane-right .raid-note-string {
+    background: linear-gradient(180deg, transparent, rgba(var(--lane-color), 0.42), transparent);
+    box-shadow: 0 0 10px rgba(var(--lane-color), 0.16);
+}
+
+.raid-note-lane.is-current-lane .raid-note-string {
+    width: 2px;
+    opacity: 0.56;
+    animation: raidLanePulse 620ms ease-in-out infinite alternate;
+}
+
+.raid-note-icon {
+    display: grid;
+    place-items: center;
+    color: #f8fafc;
+}
+
+.raid-falling-note {
+    --note-y: 6%;
+    --note-scale: 0.8;
+    --note-opacity: 0.7;
+
+    position: absolute;
+    left: 50%;
+    top: var(--note-y);
+    z-index: 54;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    transform: translate(-50%, -50%) scale(var(--note-scale));
+    border: 1px solid rgba(var(--lane-color, 148, 163, 184), 0.34);
+    border-radius: 14px;
+    background:
+            radial-gradient(circle at 38% 22%, rgba(255, 255, 255, 0.12), transparent 34%),
+            rgba(15, 23, 42, 0.62);
+    box-shadow:
+            0 0 16px rgba(var(--lane-color, 148, 163, 184), 0.16),
+            0 10px 18px rgba(0, 0, 0, 0.26);
+    opacity: var(--note-opacity);
+    transition:
+            top 50ms linear,
+            transform 50ms linear,
+            opacity 50ms linear;
+    backdrop-filter: blur(8px);
+}
+
+.raid-falling-note .raid-note-icon {
+    font-size: 25px;
+}
+
+.raid-falling-note.is-miss-window,
+.raid-falling-note.is-good-window,
+.raid-falling-note.is-hit-window {
+    animation: raidNoteReady 420ms ease-in-out infinite alternate;
+}
+
+.raid-falling-note.is-hit-window {
+    border-color: rgba(248, 250, 252, 0.7);
+    background:
+            radial-gradient(circle at 38% 22%, rgba(255, 255, 255, 0.2), transparent 34%),
+            rgba(15, 23, 42, 0.72);
+    box-shadow:
+            0 0 0 4px rgba(var(--lane-color, 148, 163, 184), 0.08),
+            0 0 24px rgba(var(--lane-color, 148, 163, 184), 0.28),
+            0 14px 24px rgba(0, 0, 0, 0.3);
+}
+
+.raid-falling-note.is-late {
+    opacity: 0.28;
+    filter: grayscale(0.5);
+}
+
+.raid-lane-target {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    z-index: 62;
+    width: 60px;
+    height: 60px;
+    display: grid;
+    place-items: center;
+    transform: translateX(-50%);
+    border: 1px solid rgba(var(--lane-color, 148, 163, 184), 0.36);
+    border-radius: 999px;
+    background:
+            radial-gradient(circle at 34% 20%, rgba(255, 255, 255, 0.12), transparent 34%),
+            rgba(15, 23, 42, 0.5);
+    box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.035),
+            0 0 20px rgba(var(--lane-color, 148, 163, 184), 0.18),
+            inset 0 -8px 14px rgba(0, 0, 0, 0.16);
+    backdrop-filter: blur(10px);
+}
+
+.raid-lane-target .raid-note-icon {
+    font-size: 30px;
+}
+
+.raid-lane-target.is-good-window,
+.raid-lane-target.is-miss-window,
+.raid-lane-target.is-hit-window {
+    animation: raidTargetPulse 420ms ease-in-out infinite alternate;
+}
+
+.raid-lane-target.is-hit-window {
+    border-color: rgba(248, 250, 252, 0.72);
+    box-shadow:
+            0 0 0 5px rgba(var(--lane-color, 148, 163, 184), 0.08),
+            0 0 28px rgba(var(--lane-color, 148, 163, 184), 0.34),
+            inset 0 -8px 14px rgba(0, 0, 0, 0.16);
+}
+
+.raid-lane-label {
+    display: none;
+}
+
+.raid-current-target {
+    position: absolute;
+    left: 50%;
+    bottom: 82px;
+    z-index: 70;
+    width: max-content;
+    max-width: calc(100% - 28px);
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    transform: translateX(-50%);
+    padding: 7px 12px;
+    border: 1px solid rgba(226, 232, 240, 0.14);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.5);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(12px);
+}
+
+.raid-current-target span {
+    color: #94a3b8;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.raid-current-target strong {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 950;
+    text-transform: uppercase;
+}
+
+.raid-current-target strong .direction-glyph {
+    width: 15px;
+    height: 15px;
+}
+
+.raid-current-target strong.is-hit-window {
+    color: #86efac;
+}
+
+.raid-current-target strong.is-good-window {
+    color: #93c5fd;
+}
+
+.raid-current-target strong.is-miss-window {
+    color: #fde68a;
+}
+
+.raid-current-target strong.is-late {
+    color: #fca5a5;
+}
+
+.raid-bottom-hud {
+    flex: 0 0 auto;
+    display: grid;
+    gap: 7px;
+    padding: 6px 9px calc(9px + env(safe-area-inset-bottom));
+    background:
+            linear-gradient(180deg, transparent 0%, rgba(2, 4, 10, 0.74) 16%, rgba(2, 4, 10, 0.97) 100%);
+}
+
+.raid-player-strip {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 6px;
+    align-items: stretch;
+}
+
+.raid-player-card {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 16px;
+}
+
+.raid-player-avatar {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 11px;
+    background: rgba(148, 163, 184, 0.12);
+    font-size: 18px;
+}
+
+.raid-player-card span,
+.raid-player-mini-stat span {
+    display: block;
+    margin-bottom: 2px;
+    color: #94a3b8;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.raid-player-card strong,
+.raid-player-mini-stat strong {
+    display: block;
+    overflow: hidden;
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 950;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.raid-player-mini-stat {
+    min-width: 58px;
+    display: grid;
+    place-items: center;
+    padding: 7px 8px;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.raid-input-dock {
+    position: relative;
+    z-index: 95;
+    padding: 8px;
+    border-radius: 22px;
+}
+
+.raid-input-dock .battle-controls-panel {
+    display: grid;
+    gap: 0;
+}
+
+.raid-input-dock .input-pad {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.raid-input-dock .input-button {
+    min-height: 60px;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    padding: 7px 5px;
+    border: 1px solid rgba(248, 250, 252, 0.11);
+    border-radius: 17px;
+    color: #f8fafc;
+    cursor: pointer;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    background:
+            radial-gradient(circle at 35% 18%, rgba(255, 255, 255, 0.1), transparent 34%),
+            linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.76));
+    box-shadow:
+            0 10px 16px rgba(0, 0, 0, 0.22),
+            inset 0 1px 0 rgba(255, 255, 255, 0.09),
+            inset 0 -8px 14px rgba(0, 0, 0, 0.14);
+    transition:
+            transform 80ms ease,
+            filter 120ms ease,
+            box-shadow 120ms ease,
+            border-color 120ms ease;
+}
+
+.raid-input-dock .input-button-left {
+    color: rgb(244, 114, 182);
+}
+
+.raid-input-dock .input-button-up {
+    color: rgb(74, 222, 128);
+}
+
+.raid-input-dock .input-button-down {
+    color: rgb(96, 165, 250);
+}
+
+.raid-input-dock .input-button-right {
+    color: rgb(251, 191, 36);
+}
+
+.raid-input-dock .input-button:hover:not(:disabled) {
+    filter: brightness(1.04);
+    border-color: rgba(248, 250, 252, 0.18);
+}
+
+.raid-input-dock .input-button:active {
+    transform: translateY(2px) scale(0.975);
+    box-shadow:
+            0 5px 10px rgba(0, 0, 0, 0.34),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08),
+            inset 0 -4px 9px rgba(0, 0, 0, 0.18);
+}
+
+.raid-input-dock .input-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.46;
+    filter: grayscale(0.25);
+}
+
+.raid-input-dock .input-button-symbol {
+    display: grid;
+    place-items: center;
+    font-size: 30px;
+    line-height: 0.92;
+    font-weight: 950;
+}
+
+.raid-input-dock .input-button-symbol .direction-glyph {
+    width: 31px;
+    height: 31px;
+}
+
+.raid-input-dock .input-button-label {
+    display: block;
+    color: rgba(226, 232, 240, 0.7);
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.raid-input-dock .input-hint {
+    display: none;
+}
+
+.raid-spectator-panel {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border-radius: 16px;
+    text-align: center;
+}
+
+.raid-spectator-panel strong {
+    color: #f8fafc;
+    font-size: 15px;
+}
+
+.raid-spectator-panel span {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+@keyframes raidBossIdle {
+    0%,
+    100% {
+        transform: translateY(0) rotate(-0.18deg) scale(0.995);
+    }
+
+    50% {
+        transform: translateY(-4px) rotate(0.22deg) scale(1.002);
+    }
+}
+
+@keyframes raidBossEnraged {
+    0%,
+    100% {
+        transform: translate(0, 0) rotate(-0.32deg) scale(1.002);
+        filter:
+                drop-shadow(0 24px 28px rgba(0, 0, 0, 0.76))
+                drop-shadow(0 0 16px rgba(248, 113, 113, 0.16));
+    }
+
+    40% {
+        transform: translate(-1px, -3px) rotate(0.38deg) scale(1.008);
+    }
+
+    72% {
+        transform: translate(1px, -1px) rotate(-0.12deg) scale(1.004);
+    }
+}
+
+@keyframes raidBossDefeated {
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg) scale(0.985);
+    }
+
+    50% {
+        transform: translateY(3px) rotate(-0.2deg) scale(0.98);
+    }
+}
+
+@keyframes raidLanePulse {
+    from {
+        filter: brightness(1);
+        transform: translateX(-50%) scaleX(1);
+    }
+
+    to {
+        filter: brightness(1.28);
+        transform: translateX(-50%) scaleX(1.22);
+    }
+}
+
+@keyframes raidTargetPulse {
+    from {
+        transform: translateX(-50%) scale(1);
+    }
+
+    to {
+        transform: translateX(-50%) scale(1.045);
+    }
+}
+
+@keyframes raidNoteReady {
+    from {
+        filter: brightness(1);
+    }
+
+    to {
+        filter: brightness(1.16);
+    }
+}
+
+@media (min-width: 430px) {
+    .raid-battle-stage {
+        width: min(100%, 440px);
+    }
+
+    .raid-boss-character-wrap {
+        width: min(76%, 360px);
+        bottom: 88px;
+    }
+
+    .raid-note-highway {
+        width: calc(100% - 34px);
+    }
+
+    .raid-lane-target {
+        width: 66px;
+        height: 66px;
+    }
+
+    .raid-lane-target .raid-note-icon {
+        font-size: 33px;
+    }
+
+    .raid-input-dock .input-button {
+        min-height: 64px;
+    }
+}
+
+@media (max-width: 380px) {
+    .raid-battle-top-hud {
+        grid-template-columns: 1fr auto 0.82fr;
+        gap: 6px;
+        padding: 8px 8px 4px;
+    }
+
+    .raid-battle-brand,
+    .raid-battle-state {
+        min-height: 46px;
+        padding: 7px 8px;
+        border-radius: 15px;
+    }
+
+    .raid-battle-brand strong,
+    .raid-battle-state span {
+        display: none;
+    }
+
+    .raid-battle-mark {
+        font-size: 18px;
+    }
+
+    .raid-battle-timer {
+        min-width: 84px;
+        padding: 7px 9px;
+    }
+
+    .raid-battle-timer strong {
+        font-size: 21px;
+    }
+
+    .raid-battle-state strong {
+        font-size: 12px;
+    }
+
+    .raid-boss-title h1 {
+        font-size: 26px;
+    }
+
+    .raid-boss-hp-bar {
+        height: 15px;
+    }
+
+    .raid-boss-health-row > strong {
+        min-width: 38px;
+        font-size: 15px;
+    }
+
+    .raid-boss-character-wrap {
+        width: min(78%, 300px);
+        bottom: 76px;
+    }
+
+    .raid-side-stats {
+        width: 90px;
+    }
+
+    .raid-stat-card,
+    .raid-rating-card {
+        padding: 7px 8px;
+    }
+
+    .raid-stat-card strong {
+        font-size: 14px;
+    }
+
+    .raid-stat-card-combo strong {
+        font-size: 21px;
+    }
+
+    .raid-rating-card strong {
+        font-size: 16px;
+    }
+
+    .raid-note-highway {
+        width: calc(100% - 18px);
+        gap: 5px;
+    }
+
+    .raid-falling-note {
+        width: 40px;
+        height: 40px;
+    }
+
+    .raid-falling-note .raid-note-icon {
+        font-size: 23px;
+    }
+
+    .raid-lane-target {
+        width: 54px;
+        height: 54px;
+    }
+
+    .raid-lane-target .raid-note-icon {
+        font-size: 27px;
+    }
+
+    .raid-current-target {
+        bottom: 76px;
+        padding: 6px 10px;
+    }
+
+    .raid-current-target strong {
+        font-size: 11px;
+    }
+
+    .raid-bottom-hud {
+        padding: 5px 8px calc(8px + env(safe-area-inset-bottom));
+    }
+
+    .raid-player-mini-stat {
+        min-width: 52px;
+    }
+
+    .raid-input-dock {
+        padding: 7px;
+        border-radius: 22px;
+    }
+
+    .raid-input-dock .input-pad {
+        gap: 6px;
+    }
+
+    .raid-input-dock .input-button {
+        min-height: 56px;
+        border-radius: 17px;
+    }
+
+    .raid-input-dock .input-button-symbol .direction-glyph {
+        width: 28px;
+        height: 28px;
+    }
+
+    .raid-input-dock .input-button-label {
+        font-size: 7px;
+    }
+}
