@@ -18,6 +18,7 @@ type UseRaidLobbyOptions = {
 type RaidLobbySocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const socketUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+const LOCAL_CLOCK_INTERVAL_MS = 50;
 
 export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const socketRef = useRef<RaidLobbySocket | null>(null);
@@ -25,14 +26,14 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const [raidState, setRaidState] = useState<RaidState>({ status: "idle" });
     const [socketStatus, setSocketStatus] = useState<SocketStatus>("idle");
     const [socketError, setSocketError] = useState<string | null>(null);
+    const [gameError, setGameError] = useState<string | null>(null);
 
     const [isJoining, setIsJoining] = useState(false);
     const [isReadyUpdating, setIsReadyUpdating] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
-    const [isAttacking, setIsAttacking] = useState(false);
     const [isInputSending, setIsInputSending] = useState(false);
 
-    const [localNow, setLocalNow] = useState(Date.now());
+    const [localNow, setLocalNow] = useState(0);
 
     const raid = raidState.status === "loaded" ? raidState.raid : null;
 
@@ -49,6 +50,9 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const canStart = Boolean(
         raid?.status === "lobby" && currentPlayer?.isHost && readyPlayersCount >= 1
     );
+
+    const effectiveSocketStatus: SocketStatus =
+        raidId && socketStatus === "idle" ? "connecting" : socketStatus;
 
     const loadRaid = useCallback(
         async (nextRaidId = raidId) => {
@@ -79,7 +83,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     useEffect(() => {
         const timerId = window.setInterval(() => {
             setLocalNow(Date.now());
-        }, 1000);
+        }, LOCAL_CLOCK_INTERVAL_MS);
 
         return () => {
             window.clearInterval(timerId);
@@ -91,16 +95,19 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             return;
         }
 
-        void loadRaid(raidId);
+        const timerId = window.setTimeout(() => {
+            void loadRaid(raidId);
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timerId);
+        };
     }, [raidId, loadRaid]);
 
     useEffect(() => {
         if (!raidId) {
             return;
         }
-
-        setSocketStatus("connecting");
-        setSocketError(null);
 
         const socket: RaidLobbySocket = io(socketUrl, {
             transports: ["websocket", "polling"]
@@ -111,6 +118,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         socket.on("connect", () => {
             setSocketStatus("connected");
             setSocketError(null);
+            setGameError(null);
 
             socket.emit("raid:joinRoom", {
                 raidId
@@ -136,19 +144,16 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsStarting(false);
-            setIsAttacking(false);
             setIsInputSending(false);
-            setSocketError(null);
+            setGameError(null);
         });
 
         socket.on("socket:error", (payload) => {
-            setSocketStatus("error");
-            setSocketError(payload.message);
+            setGameError(payload.message);
 
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsStarting(false);
-            setIsAttacking(false);
             setIsInputSending(false);
         });
 
@@ -167,12 +172,13 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         };
     }, [raidId]);
 
-    async function joinRaid() {
+    const joinRaid = useCallback(async () => {
         if (!raidId) {
             return;
         }
 
         setIsJoining(true);
+        setGameError(null);
 
         const socket = socketRef.current;
 
@@ -206,55 +212,60 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         } finally {
             setIsJoining(false);
         }
-    }
+    }, [currentUser.displayName, currentUser.id, raidId]);
 
-    async function setReady(isReady: boolean) {
-        if (!raidId) {
-            return;
-        }
+    const setReady = useCallback(
+        async (isReady: boolean) => {
+            if (!raidId) {
+                return;
+            }
 
-        setIsReadyUpdating(true);
+            setIsReadyUpdating(true);
+            setGameError(null);
 
-        const socket = socketRef.current;
+            const socket = socketRef.current;
 
-        if (socket?.connected) {
-            socket.emit("player:ready", {
-                raidId,
-                telegramUserId: currentUser.id,
-                isReady
-            });
+            if (socket?.connected) {
+                socket.emit("player:ready", {
+                    raidId,
+                    telegramUserId: currentUser.id,
+                    isReady
+                });
 
-            return;
-        }
+                return;
+            }
 
-        try {
-            const result = await setReadyApi({
-                raidId,
-                telegramUserId: currentUser.id,
-                isReady
-            });
+            try {
+                const result = await setReadyApi({
+                    raidId,
+                    telegramUserId: currentUser.id,
+                    isReady
+                });
 
-            setRaidState({
-                status: "loaded",
-                raid: result.raid,
-                serverTime: Date.now()
-            });
-        } catch (error) {
-            setRaidState({
-                status: "error",
-                message: error instanceof Error ? error.message : "Unknown error"
-            });
-        } finally {
-            setIsReadyUpdating(false);
-        }
-    }
+                setRaidState({
+                    status: "loaded",
+                    raid: result.raid,
+                    serverTime: Date.now()
+                });
+            } catch (error) {
+                setRaidState({
+                    status: "error",
+                    message: error instanceof Error ? error.message : "Unknown error"
+                });
+            } finally {
+                setIsReadyUpdating(false);
+            }
+        },
+        [currentUser.id, raidId]
+    );
 
-    async function startRaid() {
+    const startRaid = useCallback(async () => {
         if (!raidId) {
             return;
         }
 
         setIsStarting(true);
+        setGameError(null);
 
         const socket = socketRef.current;
 
@@ -286,52 +297,34 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         } finally {
             setIsStarting(false);
         }
-    }
+    }, [currentUser.id, raidId]);
 
-    function attackBoss() {
-        if (!raidId) {
-            return;
-        }
+    const sendBattleInput = useCallback(
+        (key: BattleInputKey) => {
+            if (!raidId) {
+                return;
+            }
 
-        const socket = socketRef.current;
+            const socket = socketRef.current;
 
-        if (!socket?.connected) {
-            setSocketStatus("error");
-            setSocketError("Realtime connection is required for battle actions");
-            setIsAttacking(false);
-            return;
-        }
+            if (!socket?.connected) {
+                setSocketStatus("error");
+                setSocketError("Realtime connection is required for battle input");
+                setIsInputSending(false);
+                return;
+            }
 
-        setIsAttacking(true);
+            setIsInputSending(true);
+            setGameError(null);
 
-        socket.emit("battle:attack", {
-            raidId,
-            telegramUserId: currentUser.id
-        });
-    }
-
-    function sendBattleInput(key: BattleInputKey) {
-        if (!raidId) {
-            return;
-        }
-
-        const socket = socketRef.current;
-
-        if (!socket?.connected) {
-            setSocketStatus("error");
-            setSocketError("Realtime connection is required for battle input");
-            setIsInputSending(false);
-            return;
-        }
-
-        setIsInputSending(true);
-
-        socket.emit("battle:input", {
-            raidId,
-            telegramUserId: currentUser.id,
-            key
-        });
-    }
+            socket.emit("battle:input", {
+                raidId,
+                telegramUserId: currentUser.id,
+                key
+            });
+        },
+        [currentUser.id, raidId]
+    );
 
     return {
         raidState,
@@ -341,18 +334,17 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         readyPlayersCount,
         canStart,
         localNow,
-        socketStatus,
+        socketStatus: effectiveSocketStatus,
         socketError,
+        gameError,
         isJoining,
         isReadyUpdating,
         isStarting,
-        isAttacking,
         isInputSending,
         loadRaid,
         joinRaid,
         setReady,
         startRaid,
-        attackBoss,
         sendBattleInput
     };
 }

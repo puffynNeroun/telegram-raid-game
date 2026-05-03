@@ -6,6 +6,9 @@ export type BossPhase = "idle" | "hurt" | "rage" | "defeated";
 
 export type BattleInputKey = "left" | "up" | "down" | "right";
 
+export type BattleNoteStatus = "pending" | "hit" | "missed";
+export type BattleInputRating = "perfect" | "good" | "miss" | "wrong";
+
 export type RaidPlayer = {
     telegramUserId: string;
     displayName: string;
@@ -22,31 +25,56 @@ export type BattleBossState = {
     phase: BossPhase;
 };
 
+export type BattleNote = {
+    id: string;
+    telegramUserId: string;
+    key: BattleInputKey;
+    hitAt: number;
+    status: BattleNoteStatus;
+    rating: BattleInputRating | null;
+    resolvedAt: number | null;
+    inputAt: number | null;
+};
+
 export type BattlePlayerState = {
     telegramUserId: string;
     displayName: string;
+
     hp: number;
     maxHp: number;
+
     combo: number;
     maxCombo: number;
+
     damage: number;
     perfectCount: number;
     goodCount: number;
     missCount: number;
     wrongCount: number;
+
     deaths: number;
     isStunned: boolean;
     stunnedUntil: number | null;
+
+    lastInputKey: BattleInputKey | null;
+    lastInputAt: number | null;
+    lastRating: BattleInputRating | null;
+    lastDamageDealt: number;
+    lastDamageTaken: number;
 };
 
 export type BattleState = {
     status: BattleStatus;
     outcome: BattleOutcome;
+
     startedAt: number;
     endsAt: number;
     durationSeconds: number;
+
     boss: BattleBossState;
     players: Record<string, BattlePlayerState>;
+
+    notesByPlayer: Record<string, BattleNote[]>;
 };
 
 export type Raid = {
