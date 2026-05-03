@@ -35,6 +35,16 @@ type RaidBattleScreenProps = {
     onBattleInput: (key: BattleInputKey) => void;
 };
 
+type BattleConclusionOutcome = Exclude<BattleState["outcome"], null>;
+
+type BattleAnnouncement = {
+    kicker: string;
+    title: string;
+    description: string;
+    footer: string;
+    toneClassName: "is-victory" | "is-defeat";
+};
+
 const LANES: BattleInputKey[] = ["left", "up", "down", "right"];
 
 const NOTE_TRAVEL_MS = 3200;
@@ -54,19 +64,43 @@ export function RaidBattleScreen({
     const currentBattlePlayer = battle.players[currentUser.id] ?? null;
     const currentPlayerNotes = battle.notesByPlayer[currentUser.id] ?? [];
 
+    const isBattleConcluded =
+        raid.status === "finished" || battle.status === "finished";
+
+    const resolvedOutcome = getResolvedBattleOutcome(battle);
+    const announcement = isBattleConcluded
+        ? getBattleAnnouncement(resolvedOutcome)
+        : null;
+
     const visibleNotes = useMemo(() => {
+        if (isBattleConcluded) {
+            return [];
+        }
+
         return getArenaVisibleNotes(currentPlayerNotes, localNow);
-    }, [currentPlayerNotes, localNow]);
+    }, [currentPlayerNotes, isBattleConcluded, localNow]);
 
     const currentTargetNote = useMemo(() => {
-        return getCurrentTargetNote(currentPlayerNotes, localNow);
-    }, [currentPlayerNotes, localNow]);
+        if (isBattleConcluded) {
+            return null;
+        }
 
-    const battleTimeLeft = formatClock(battle.endsAt, localNow);
+        return getCurrentTargetNote(currentPlayerNotes, localNow);
+    }, [currentPlayerNotes, isBattleConcluded, localNow]);
+
+    const battleTimeLeft = isBattleConcluded ? "0:00" : formatClock(battle.endsAt, localNow);
     const bossHpPercent = getBossHpPercent(battle.boss.hp, battle.boss.maxHp);
     const bossStage = getBossStage(bossHpPercent);
     const teamDamage = Math.max(0, battle.boss.maxHp - battle.boss.hp);
-    const battleOutcomeLabel = getBattleOutcomeLabel(battle.status, bossHpPercent);
+    const battleOutcomeLabel = getBattleOutcomeLabel({
+        status: battle.status,
+        outcome: resolvedOutcome,
+        bossHpPercent
+    });
+
+    const isCurrentPlayerDefeated = Boolean(
+        currentBattlePlayer && currentBattlePlayer.hp <= 0
+    );
 
     const isCurrentPlayerStunned = Boolean(
         currentBattlePlayer &&
@@ -77,7 +111,9 @@ export function RaidBattleScreen({
 
     const canSendBattleInput = Boolean(
         battle.status === "active" &&
+        !isBattleConcluded &&
         currentBattlePlayer &&
+        !isCurrentPlayerDefeated &&
         !isCurrentPlayerStunned
     );
 
@@ -88,7 +124,9 @@ export function RaidBattleScreen({
     return (
         <main className="raid-battle-page">
             <section
-                className="raid-battle-stage"
+                className={`raid-battle-stage ${
+                    isBattleConcluded ? "is-concluded" : ""
+                } ${announcement?.toneClassName ?? ""}`}
                 style={
                     {
                         "--raid-arena-image": "url('/raid/rosemaul/arena.png')"
@@ -102,7 +140,7 @@ export function RaidBattleScreen({
                     </div>
 
                     <div className="raid-battle-timer">
-                        <span>{battle.status === "active" ? "Time" : "Ended"}</span>
+                        <span>{isBattleConcluded ? "Ended" : "Time"}</span>
                         <strong>{battleTimeLeft}</strong>
                     </div>
 
@@ -133,7 +171,7 @@ export function RaidBattleScreen({
                     </div>
 
                     <p>
-                        {battle.boss.hp}/{battle.boss.maxHp} HP
+                        {Math.max(0, battle.boss.hp)}/{battle.boss.maxHp} HP
                     </p>
                 </section>
 
@@ -167,7 +205,7 @@ export function RaidBattleScreen({
                             <strong>{currentBattlePlayer?.combo ?? 0}</strong>
                         </div>
 
-                        {currentBattlePlayer?.lastRating && (
+                        {currentBattlePlayer?.lastRating && !isBattleConcluded && (
                             <div
                                 className={`raid-rating-card ${getRatingClassName(
                                     currentBattlePlayer.lastRating
@@ -184,74 +222,89 @@ export function RaidBattleScreen({
                         )}
                     </aside>
 
-                    <section className="raid-note-highway" aria-label="Battle note lanes">
-                        {LANES.map((laneKey) => {
-                            const laneNotes = visibleNotes
-                                .filter((note) => note.key === laneKey)
-                                .slice(0, MAX_LANE_NOTES);
+                    {!isBattleConcluded && (
+                        <section className="raid-note-highway" aria-label="Battle note lanes">
+                            {LANES.map((laneKey) => {
+                                const laneNotes = visibleNotes
+                                    .filter((note) => note.key === laneKey)
+                                    .slice(0, MAX_LANE_NOTES);
 
-                            const isCurrentLane = currentTargetNote?.key === laneKey;
+                                const isCurrentLane = currentTargetNote?.key === laneKey;
 
-                            return (
-                                <div
-                                    className={`raid-note-lane raid-note-lane-${laneKey} ${
-                                        isCurrentLane ? "is-current-lane" : ""
-                                    }`}
-                                    key={laneKey}
-                                >
-                                    <div className="raid-note-string" />
-
-                                    {laneNotes.map((note) => {
-                                        const timingClassName = getNoteTimingClassName(
-                                            note,
-                                            localNow
-                                        );
-
-                                        return (
-                                            <div
-                                                className={`raid-falling-note raid-falling-note-${note.key} ${timingClassName}`}
-                                                key={note.id}
-                                                style={getFallingNoteStyle(note, localNow)}
-                                            >
-                                                <span className="raid-note-icon" aria-hidden="true">
-                                                    <DirectionGlyph direction={note.key} />
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-
+                                return (
                                     <div
-                                        className={`raid-lane-target ${
-                                            isCurrentLane ? currentTimingClassName : ""
+                                        className={`raid-note-lane raid-note-lane-${laneKey} ${
+                                            isCurrentLane ? "is-current-lane" : ""
                                         }`}
+                                        key={laneKey}
                                     >
-                                        <span className="raid-note-icon" aria-hidden="true">
-                                            <DirectionGlyph direction={laneKey} />
-                                        </span>
+                                        <div className="raid-note-string" />
+
+                                        {laneNotes.map((note) => {
+                                            const timingClassName = getNoteTimingClassName(
+                                                note,
+                                                localNow
+                                            );
+
+                                            return (
+                                                <div
+                                                    className={`raid-falling-note raid-falling-note-${note.key} ${timingClassName}`}
+                                                    key={note.id}
+                                                    style={getFallingNoteStyle(note, localNow)}
+                                                >
+                                                    <span
+                                                        className="raid-note-icon"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <DirectionGlyph direction={note.key} />
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+
+                                        <div
+                                            className={`raid-lane-target ${
+                                                isCurrentLane ? currentTimingClassName : ""
+                                            }`}
+                                        >
+                                            <span className="raid-note-icon" aria-hidden="true">
+                                                <DirectionGlyph direction={laneKey} />
+                                            </span>
+                                        </div>
                                     </div>
+                                );
+                            })}
+                        </section>
+                    )}
+
+                    {announcement && (
+                        <section
+                            className={`raid-battle-announcement ${announcement.toneClassName}`}
+                            aria-live="assertive"
+                        >
+                            <div className="raid-battle-announcement-frame">
+                                <span className="raid-battle-announcement-kicker">
+                                    {announcement.kicker}
+                                </span>
+
+                                <h2>{announcement.title}</h2>
+
+                                <p>{announcement.description}</p>
+
+                                <div className="raid-battle-announcement-footer">
+                                    {announcement.footer}
                                 </div>
-                            );
-                        })}
-                    </section>
-
-                    {/*<section className="raid-current-target">*/}
-                    {/*    <span>Target</span>*/}
-
-                    {/*    {currentTargetNote ? (*/}
-                    {/*        <strong className={currentTimingClassName}>*/}
-                    {/*            <DirectionGlyph direction={currentTargetNote.key} />*/}
-                    {/*            {getTimingLabel(currentTimingClassName)}*/}
-                    {/*        </strong>*/}
-                    {/*    ) : (*/}
-                    {/*        <strong>Waiting</strong>*/}
-                    {/*    )}*/}
-                    {/*</section>*/}
+                            </div>
+                        </section>
+                    )}
                 </section>
 
                 <section className="raid-bottom-hud">
                     <div className="raid-player-strip">
                         <div className="raid-player-card">
-                            <div className="raid-player-avatar">👑</div>
+                            <div className="raid-player-avatar">
+                                {isCurrentPlayerDefeated ? "💀" : "👑"}
+                            </div>
 
                             <div>
                                 <span>You</span>
@@ -273,7 +326,12 @@ export function RaidBattleScreen({
                         </div>
                     </div>
 
-                    {battle.status === "active" && currentBattlePlayer ? (
+                    {announcement ? (
+                        <div className={`raid-conclusion-dock ${announcement.toneClassName}`}>
+                            <strong>{announcement.title}</strong>
+                            <span>{announcement.footer}</span>
+                        </div>
+                    ) : battle.status === "active" && currentBattlePlayer ? (
                         <div className="raid-input-dock">
                             <BattleControls
                                 canSendBattleInput={canSendBattleInput}
@@ -283,17 +341,9 @@ export function RaidBattleScreen({
                         </div>
                     ) : (
                         <div className="raid-spectator-panel">
-                            <strong>
-                                {battle.status === "finished"
-                                    ? "Battle finished"
-                                    : "Spectator mode"}
-                            </strong>
+                            <strong>{getInactivePlayerTitle(currentBattlePlayer)}</strong>
 
-                            <span>
-                                {battle.status === "finished"
-                                    ? "The fight is over."
-                                    : "Join the raid before sending battle input."}
-                            </span>
+                            <span>{getInactivePlayerDescription(currentBattlePlayer)}</span>
                         </div>
                     )}
                 </section>
@@ -371,30 +421,93 @@ function getFallingNoteStyle(note: BattleNote, localNow: number): CSSProperties 
     } as CSSProperties;
 }
 
-function getBattleOutcomeLabel(status: BattleState["status"], bossHpPercent: number): string {
-    if (status === "active") {
+function getResolvedBattleOutcome(
+    battle: BattleState
+): BattleConclusionOutcome | null {
+    if (battle.outcome) {
+        return battle.outcome;
+    }
+
+    if (battle.status !== "finished") {
+        return null;
+    }
+
+    return battle.boss.hp <= 0 ? "win" : "lose";
+}
+
+function getBattleAnnouncement(
+    outcome: BattleConclusionOutcome | null
+): BattleAnnouncement | null {
+    if (!outcome) {
+        return null;
+    }
+
+    if (outcome === "win") {
+        return {
+            kicker: "Raid complete",
+            title: "Boss defeated",
+            description: "The squad broke the boss before the timer expired.",
+            footer: "Preparing battle report...",
+            toneClassName: "is-victory"
+        };
+    }
+
+    return {
+        kicker: "Raid failed",
+        title: "Squad defeated",
+        description: "The boss survived. Your team ran out of HP.",
+        footer: "Preparing battle report...",
+        toneClassName: "is-defeat"
+    };
+}
+
+function getBattleOutcomeLabel(input: {
+    status: BattleState["status"];
+    outcome: BattleConclusionOutcome | null;
+    bossHpPercent: number;
+}): string {
+    if (input.status === "active") {
         return "Live";
     }
 
-    return bossHpPercent <= 0 ? "Victory" : "Failed";
+    if (input.outcome === "win") {
+        return "Victory";
+    }
+
+    if (input.outcome === "lose") {
+        return "Failed";
+    }
+
+    return input.bossHpPercent <= 0 ? "Victory" : "Failed";
 }
 
-// function getTimingLabel(timingClassName: string): string {
-//     switch (timingClassName) {
-//         case "is-hit-window":
-//             return "Hit";
-//         case "is-good-window":
-//             return "Ready";
-//         case "is-miss-window":
-//             return "Late";
-//         case "is-late":
-//             return "Missed";
-//         case "is-soon":
-//             return "Soon";
-//         default:
-//             return "Queued";
-//     }
-// }
+function getInactivePlayerTitle(
+    currentBattlePlayer: BattleState["players"][string] | null
+): string {
+    if (!currentBattlePlayer) {
+        return "Spectator mode";
+    }
+
+    if (currentBattlePlayer.hp <= 0) {
+        return "You are defeated";
+    }
+
+    return "Battle unavailable";
+}
+
+function getInactivePlayerDescription(
+    currentBattlePlayer: BattleState["players"][string] | null
+): string {
+    if (!currentBattlePlayer) {
+        return "Join the raid before sending battle input.";
+    }
+
+    if (currentBattlePlayer.hp <= 0) {
+        return "Wait for the final result.";
+    }
+
+    return "Battle input is currently disabled.";
+}
 
 function getRatingImpactText(damageDealt: number, damageTaken: number): string {
     if (damageDealt > 0) {
