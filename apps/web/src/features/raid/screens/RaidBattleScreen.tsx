@@ -45,9 +45,15 @@ type BattleAnnouncement = {
     toneClassName: "is-victory" | "is-defeat";
 };
 
+type BossStageView = {
+    key: "100" | "66" | "33" | "0";
+    label: string;
+    src: string;
+};
+
 const LANES: BattleInputKey[] = ["left", "up", "down", "right"];
 
-const NOTE_TRAVEL_MS = 3200;
+const NOTE_TRAVEL_MS = 2800;
 const NOTE_LOOK_BEHIND_MS = 900;
 const MAX_LANE_NOTES = 4;
 
@@ -62,7 +68,10 @@ export function RaidBattleScreen({
                                      onBattleInput
                                  }: RaidBattleScreenProps) {
     const currentBattlePlayer = battle.players[currentUser.id] ?? null;
-    const currentPlayerNotes = battle.notesByPlayer[currentUser.id] ?? [];
+
+    const currentPlayerNotes = useMemo(() => {
+        return battle.notesByPlayer[currentUser.id] ?? [];
+    }, [battle.notesByPlayer, currentUser.id]);
 
     const isBattleConcluded =
         raid.status === "finished" || battle.status === "finished";
@@ -72,31 +81,52 @@ export function RaidBattleScreen({
         ? getBattleAnnouncement(resolvedOutcome)
         : null;
 
+    const introRemainingMs = getBattleIntroRemainingMs({
+        battle,
+        localNow,
+        isBattleConcluded
+    });
+
+    const isBattleIntroActive = introRemainingMs > 0;
+    const introLabel = getBattleIntroLabel(introRemainingMs);
+
     const visibleNotes = useMemo(() => {
-        if (isBattleConcluded) {
+        if (isBattleConcluded || isBattleIntroActive) {
             return [];
         }
 
         return getArenaVisibleNotes(currentPlayerNotes, localNow);
-    }, [currentPlayerNotes, isBattleConcluded, localNow]);
+    }, [currentPlayerNotes, isBattleConcluded, isBattleIntroActive, localNow]);
 
     const currentTargetNote = useMemo(() => {
-        if (isBattleConcluded) {
+        if (isBattleConcluded || isBattleIntroActive) {
             return null;
         }
 
         return getCurrentTargetNote(currentPlayerNotes, localNow);
-    }, [currentPlayerNotes, isBattleConcluded, localNow]);
+    }, [currentPlayerNotes, isBattleConcluded, isBattleIntroActive, localNow]);
 
-    const battleTimeLeft = isBattleConcluded ? "0:00" : formatClock(battle.endsAt, localNow);
+    const bossAssetSlug = getBossAssetSlug(battle);
     const bossHpPercent = getBossHpPercent(battle.boss.hp, battle.boss.maxHp);
-    const bossStage = getBossStage(bossHpPercent);
-    const teamDamage = Math.max(0, battle.boss.maxHp - battle.boss.hp);
-    const battleOutcomeLabel = getBattleOutcomeLabel({
-        status: battle.status,
-        outcome: resolvedOutcome,
-        bossHpPercent
+    const bossStage = getBossStage({
+        bossHpPercent,
+        assetSlug: bossAssetSlug,
+        subtitle: battle.boss.subtitle
     });
+
+    const battleTimeLeft = isBattleConcluded
+        ? "0:00"
+        : formatClock(battle.endsAt, localNow);
+
+    const teamDamage = Math.max(0, battle.boss.maxHp - battle.boss.hp);
+
+    const battleOutcomeLabel = isBattleIntroActive
+        ? "Ready"
+        : getBattleOutcomeLabel({
+            status: battle.status,
+            outcome: resolvedOutcome,
+            bossHpPercent
+        });
 
     const isCurrentPlayerDefeated = Boolean(
         currentBattlePlayer && currentBattlePlayer.hp <= 0
@@ -112,6 +142,7 @@ export function RaidBattleScreen({
     const canSendBattleInput = Boolean(
         battle.status === "active" &&
         !isBattleConcluded &&
+        !isBattleIntroActive &&
         currentBattlePlayer &&
         !isCurrentPlayerDefeated &&
         !isCurrentPlayerStunned
@@ -126,10 +157,12 @@ export function RaidBattleScreen({
             <section
                 className={`raid-battle-stage ${
                     isBattleConcluded ? "is-concluded" : ""
-                } ${announcement?.toneClassName ?? ""}`}
+                } ${isBattleIntroActive ? "is-intro" : ""} ${
+                    announcement?.toneClassName ?? ""
+                }`}
                 style={
                     {
-                        "--raid-arena-image": "url('/raid/rosemaul/arena.png')"
+                        "--raid-arena-image": `url('/raid/${bossAssetSlug}/arena.png')`
                     } as CSSProperties
                 }
             >
@@ -140,8 +173,17 @@ export function RaidBattleScreen({
                     </div>
 
                     <div className="raid-battle-timer">
-                        <span>{isBattleConcluded ? "Ended" : "Time"}</span>
-                        <strong>{battleTimeLeft}</strong>
+                        <span>
+                            {isBattleConcluded
+                                ? "Ended"
+                                : isBattleIntroActive
+                                    ? "Ready"
+                                    : "Time"}
+                        </span>
+
+                        <strong>
+                            {isBattleIntroActive ? introLabel : battleTimeLeft}
+                        </strong>
                     </div>
 
                     <div className="raid-battle-state">
@@ -154,7 +196,7 @@ export function RaidBattleScreen({
 
                 <section className="raid-boss-hud">
                     <div className="raid-boss-title">
-                        <span>Level 01</span>
+                        <span>{formatBossLevel(battle.boss.level)}</span>
                         <h1>{battle.boss.name}</h1>
                         <strong>{bossStage.label}</strong>
                     </div>
@@ -211,7 +253,10 @@ export function RaidBattleScreen({
                                     currentBattlePlayer.lastRating
                                 )}`}
                             >
-                                <strong>{formatRating(currentBattlePlayer.lastRating)}</strong>
+                                <strong>
+                                    {formatRating(currentBattlePlayer.lastRating)}
+                                </strong>
+
                                 <span>
                                     {getRatingImpactText(
                                         currentBattlePlayer.lastDamageDealt,
@@ -222,8 +267,11 @@ export function RaidBattleScreen({
                         )}
                     </aside>
 
-                    {!isBattleConcluded && (
-                        <section className="raid-note-highway" aria-label="Battle note lanes">
+                    {!isBattleConcluded && !isBattleIntroActive && (
+                        <section
+                            className="raid-note-highway"
+                            aria-label="Battle note lanes"
+                        >
                             {LANES.map((laneKey) => {
                                 const laneNotes = visibleNotes
                                     .filter((note) => note.key === laneKey)
@@ -267,13 +315,32 @@ export function RaidBattleScreen({
                                                 isCurrentLane ? currentTimingClassName : ""
                                             }`}
                                         >
-                                            <span className="raid-note-icon" aria-hidden="true">
+                                            <span
+                                                className="raid-note-icon"
+                                                aria-hidden="true"
+                                            >
                                                 <DirectionGlyph direction={laneKey} />
                                             </span>
                                         </div>
                                     </div>
                                 );
                             })}
+                        </section>
+                    )}
+
+                    {isBattleIntroActive && (
+                        <section className="raid-battle-intro" aria-live="polite">
+                            <div className="raid-battle-intro-frame">
+                                <span className="raid-battle-intro-kicker">
+                                    Raid starts in
+                                </span>
+
+                                <strong className="raid-battle-intro-count">
+                                    {introLabel}
+                                </strong>
+
+                                <p>Get ready. First notes are incoming.</p>
+                            </div>
                         </section>
                     )}
 
@@ -326,8 +393,17 @@ export function RaidBattleScreen({
                         </div>
                     </div>
 
-                    {announcement ? (
-                        <div className={`raid-conclusion-dock ${announcement.toneClassName}`}>
+                    {isBattleIntroActive ? (
+                        <div className="raid-intro-dock">
+                            <strong>Prepare your input</strong>
+                            <span>
+                                Watch the lanes. Fight starts after the countdown.
+                            </span>
+                        </div>
+                    ) : announcement ? (
+                        <div
+                            className={`raid-conclusion-dock ${announcement.toneClassName}`}
+                        >
                             <strong>{announcement.title}</strong>
                             <span>{announcement.footer}</span>
                         </div>
@@ -371,39 +447,47 @@ function getArenaVisibleNotes(notes: BattleNote[], now: number): BattleNote[] {
         .sort((a, b) => a.hitAt - b.hitAt);
 }
 
-function getBossStage(bossHpPercent: number): {
-    key: "100" | "66" | "33" | "0";
-    label: string;
-    src: string;
-} {
-    if (bossHpPercent <= 0) {
+function getBossAssetSlug(battle: BattleState): string {
+    const assetSlug = battle.boss.assetSlug?.trim();
+
+    return assetSlug || "rosemaul";
+}
+
+function getBossStage(input: {
+    bossHpPercent: number;
+    assetSlug: string;
+    subtitle: string;
+}): BossStageView {
+    const basePath = `/raid/${input.assetSlug}`;
+
+    if (input.bossHpPercent <= 0) {
         return {
             key: "0",
             label: "Defeated",
-            src: "/raid/rosemaul/boss-0.png"
+            src: `${basePath}/boss-0.png`
         };
     }
 
-    if (bossHpPercent <= 33) {
+    if (input.bossHpPercent <= 33) {
         return {
             key: "33",
             label: "Enraged",
-            src: "/raid/rosemaul/boss-33.png"
+            src: `${basePath}/boss-33.png`
         };
     }
 
-    if (bossHpPercent <= 66) {
+    if (input.bossHpPercent <= 66) {
         return {
             key: "66",
             label: "Wounded",
-            src: "/raid/rosemaul/boss-66.png"
+            src: `${basePath}/boss-66.png`
         };
     }
 
     return {
         key: "100",
-        label: "Blooming brute",
-        src: "/raid/rosemaul/boss-100.png"
+        label: input.subtitle || "Stable",
+        src: `${basePath}/boss-100.png`
     };
 }
 
@@ -519,6 +603,37 @@ function getRatingImpactText(damageDealt: number, damageTaken: number): string {
     }
 
     return "No damage";
+}
+
+function getBattleIntroRemainingMs(input: {
+    battle: BattleState;
+    localNow: number;
+    isBattleConcluded: boolean;
+}): number {
+    if (input.isBattleConcluded || input.battle.status !== "active") {
+        return 0;
+    }
+
+    const introEndsAt =
+        typeof input.battle.introEndsAt === "number"
+            ? input.battle.introEndsAt
+            : input.battle.startedAt;
+
+    return Math.max(0, introEndsAt - input.localNow);
+}
+
+function getBattleIntroLabel(introRemainingMs: number): string {
+    if (introRemainingMs <= 0) {
+        return "Fight";
+    }
+
+    return String(Math.ceil(introRemainingMs / 1000));
+}
+
+function formatBossLevel(level: number): string {
+    const safeLevel = Number.isFinite(level) ? level : 1;
+
+    return `Level ${String(safeLevel).padStart(2, "0")}`;
 }
 
 function DirectionGlyph({ direction }: { direction: BattleInputKey }) {

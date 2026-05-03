@@ -32,6 +32,13 @@
   z-index: 1;
 }
 
+.raid-result-header h1 {
+  max-width: 270px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .raid-result-pill.is-win {
   border-color: rgba(74, 222, 128, 0.32);
   background: rgba(20, 83, 45, 0.28);
@@ -90,11 +97,18 @@
   border-radius: 20px;
   background: rgba(20, 83, 45, 0.18);
   font-size: 28px;
+  box-shadow:
+          0 14px 28px rgba(0, 0, 0, 0.24),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .raid-result-hero.is-lose .raid-result-emblem {
   border-color: rgba(248, 113, 113, 0.24);
   background: rgba(127, 29, 29, 0.18);
+}
+
+.raid-result-hero-copy {
+  min-width: 0;
 }
 
 .raid-result-hero-copy span,
@@ -109,8 +123,10 @@
 }
 
 .raid-result-hero-copy h2 {
-  margin-bottom: 6px;
+  margin: 0 0 6px;
+  color: #f8fafc;
   font-size: 24px;
+  line-height: 0.98;
   letter-spacing: -0.04em;
 }
 
@@ -122,7 +138,7 @@
 }
 
 .raid-result-time-badge {
-  min-width: 72px;
+  min-width: 76px;
   padding: 10px 12px;
   border: 1px solid rgba(74, 222, 128, 0.24);
   border-radius: 18px;
@@ -138,6 +154,44 @@
   color: #f8fafc;
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+}
+
+.raid-result-boss-shell .boss-panel {
+  background:
+          radial-gradient(circle at 0% 0%, rgba(74, 222, 128, 0.1), transparent 50%),
+          linear-gradient(135deg, rgba(30, 41, 59, 0.64), rgba(15, 23, 42, 0.42));
+}
+
+.raid-result-card.is-lose .raid-result-boss-shell .boss-panel {
+  background:
+          radial-gradient(circle at 0% 0%, rgba(248, 113, 113, 0.1), transparent 50%),
+          linear-gradient(135deg, rgba(30, 41, 59, 0.64), rgba(15, 23, 42, 0.42));
+}
+
+.raid-result-boss-shell .boss-art {
+  border-color: rgba(74, 222, 128, 0.2);
+  background:
+          radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.12), transparent 38%),
+          rgba(74, 222, 128, 0.1);
+}
+
+.raid-result-card.is-lose .raid-result-boss-shell .boss-art {
+  border-color: rgba(248, 113, 113, 0.22);
+  background:
+          radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.12), transparent 38%),
+          rgba(248, 113, 113, 0.1);
+}
+
+.raid-result-boss-shell .hp-bar-fill {
+  background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 48%),
+          linear-gradient(90deg, #22c55e 0%, #86efac 100%);
+}
+
+.raid-result-card.is-lose .raid-result-boss-shell .hp-bar-fill {
+  background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 48%),
+          linear-gradient(90deg, #fb7185 0%, #f97316 58%, #ef4444 100%);
 }
 
 .raid-result-summary-grid {
@@ -175,6 +229,8 @@
 }
 
 .raid-result-breakdown {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 14px;
   padding: 16px;
@@ -183,7 +239,25 @@
   background: rgba(2, 6, 23, 0.28);
 }
 
+.raid-result-breakdown::before {
+  content: "";
+  position: absolute;
+  inset: -80px auto auto -80px;
+  width: 150px;
+  height: 150px;
+  pointer-events: none;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.raid-result-section-head {
+  position: relative;
+  z-index: 1;
+}
+
 .raid-result-breakdown-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -192,6 +266,7 @@
 .raid-result-breakdown-grid article {
   min-width: 0;
   padding: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
   border-radius: 17px;
   background: rgba(15, 23, 42, 0.58);
 }
@@ -217,7 +292,56 @@
   white-space: nowrap;
 }
 
+.raid-result-breakdown-grid article:nth-child(1) strong {
+  color: #f8fafc;
+}
+
+.raid-result-breakdown-grid article:nth-child(2) strong {
+  color: #cbd5e1;
+}
+
+.raid-result-breakdown-grid article:nth-child(3) strong {
+  color: #f8fafc;
+}
+
+.raid-result-card.is-win .raid-result-breakdown-grid article:nth-child(3) strong {
+  color: #bbf7d0;
+}
+
+.raid-result-card.is-lose .raid-result-breakdown-grid article:nth-child(3) strong {
+  color: #fecaca;
+}
+
 .raid-result-debug {
   position: relative;
   z-index: 1;
+}
+
+@media (max-width: 380px) {
+  .raid-result-header h1 {
+    max-width: 220px;
+  }
+
+  .raid-result-hero {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+  }
+
+  .raid-result-time-badge {
+    grid-column: 1 / -1;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .raid-result-time-badge span {
+    margin-bottom: 0;
+  }
+
+  .raid-result-summary-grid,
+  .raid-result-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
 }

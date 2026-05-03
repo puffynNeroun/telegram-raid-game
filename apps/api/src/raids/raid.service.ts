@@ -1,4 +1,5 @@
 import { nanoid } from "nanoid";
+import { DEFAULT_BOSS_ID, getBossConfig } from "./boss.config.js";
 import type {
     BattleAttackInput,
     BattleAttackResult,
@@ -9,9 +10,12 @@ import type {
     BattleNote,
     BattlePlayerState,
     BattleState,
+    BossConfig,
     BossPhase,
+    BossHpMultiplierByPlayers,
     CreateRaidInput,
     CreateRaidResult,
+    FinalizeExpiredBattleResult,
     JoinRaidInput,
     JoinRaidResult,
     Raid,
@@ -21,28 +25,12 @@ import type {
     SetReadyInput,
     SetReadyResult,
     StartRaidInput,
-    StartRaidResult,
-    FinalizeExpiredBattleResult
+    StartRaidResult
 } from "./raid.types.js";
 import {
-    BASE_BOSS_HP,
-    BATTLE_ATTACK_DAMAGE,
-    BATTLE_DURATION_SECONDS,
-    BATTLE_GOOD_DAMAGE,
     BATTLE_INPUT_KEYS,
-    BATTLE_MISS_DAMAGE,
-    BATTLE_MISS_PLAYER_DAMAGE,
-    BATTLE_NOTE_FIRST_HIT_DELAY_MS,
-    BATTLE_NOTE_GOOD_WINDOW_MS,
-    BATTLE_NOTE_INTERVAL_MS,
-    BATTLE_NOTE_MISS_WINDOW_MS,
-    BATTLE_NOTE_PERFECT_WINDOW_MS,
-    BATTLE_PERFECT_DAMAGE,
     BATTLE_RESULT_TTL_SECONDS,
-    BATTLE_WRONG_DAMAGE,
-    BATTLE_WRONG_PLAYER_DAMAGE,
     MAX_PLAYERS_PER_RAID,
-    PLAYER_MAX_HP,
     RAID_TTL_SECONDS
 } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
@@ -69,20 +57,27 @@ type BattleInputCandidate = {
     distanceMs: number;
 };
 
+type RandomGenerator = () => number;
+
 export class RaidService {
     constructor(private readonly raidRepository: RaidRepository) {}
 
     async createRaid(input: CreateRaidInput): Promise<CreateRaidResult> {
         const now = Date.now();
+        const bossConfig = getBossConfig(input.bossId ?? DEFAULT_BOSS_ID);
 
         const raid: Raid = {
             id: nanoid(10),
+            bossId: bossConfig.id,
+
             telegramChatId: input.telegramChatId,
             hostTelegramUserId: input.hostTelegramUserId,
             hostDisplayName: input.hostDisplayName,
+
             status: "lobby",
             createdAt: now,
             expiresAt: now + RAID_TTL_SECONDS * 1000,
+
             battle: null,
             players: {
                 [input.hostTelegramUserId]: {
@@ -167,6 +162,7 @@ export class RaidService {
 
         const updatedRaid: Raid = {
             ...raid,
+            bossId: raid.bossId ?? DEFAULT_BOSS_ID,
             players: {
                 ...raid.players,
                 [input.telegramUserId]: player
@@ -217,6 +213,7 @@ export class RaidService {
 
         const updatedRaid: Raid = {
             ...raid,
+            bossId: raid.bossId ?? DEFAULT_BOSS_ID,
             players: {
                 ...raid.players,
                 [input.telegramUserId]: updatedPlayer
@@ -279,17 +276,21 @@ export class RaidService {
         }
 
         const now = Date.now();
+        const bossConfig = resolveRaidBossConfig(raid);
         const battle = this.createBattleState({
             raid,
+            bossConfig,
             startedAt: now
         });
 
         const updatedRaid: Raid = {
             ...raid,
+            bossId: bossConfig.id,
             status: "battle",
             battle,
             expiresAt:
-                now + (BATTLE_DURATION_SECONDS + BATTLE_RESULT_TTL_SECONDS) * 1000
+                now +
+                (bossConfig.durationSeconds + BATTLE_RESULT_TTL_SECONDS) * 1000
         };
 
         await this.raidRepository.saveRaid(updatedRaid);
@@ -301,10 +302,15 @@ export class RaidService {
     }
 
     async applyBattleAttack(input: BattleAttackInput): Promise<BattleAttackResult> {
+        const raid = await this.raidRepository.getRaid(input.raidId);
+        const bossConfig = raid?.battle
+            ? resolveBattleBossConfig(raid.battle)
+            : getBossConfig(DEFAULT_BOSS_ID);
+
         const result = await this.applyBattleDamage({
             raidId: input.raidId,
             telegramUserId: input.telegramUserId,
-            damage: BATTLE_ATTACK_DAMAGE
+            damage: bossConfig.scoring.attackDamage
         });
 
         if (!result.ok) {
@@ -353,15 +359,22 @@ export class RaidService {
             };
         }
 
-        const missedResult = resolveMissedNotesInBattle(raid.battle, now);
-        const raidAfterMisses = buildRaidAfterBattleChange(
-            {
+        const bossConfig = resolveBattleBossConfig(raid.battle);
+
+        const missedResult = resolveMissedNotesInBattle({
+            battle: raid.battle,
+            bossConfig,
+            now
+        });
+
+        const raidAfterMisses = buildRaidAfterBattleChange({
+            raid: {
                 ...raid,
                 battle: missedResult.battle
             },
-            missedResult.battle,
-            now
-        );
+            battle: missedResult.battle,
+            finishedAt: now
+        });
 
         if (raidAfterMisses.status === "finished") {
             await this.raidRepository.saveRaid(raidAfterMisses);
@@ -407,16 +420,17 @@ export class RaidService {
 
         const inputResult = applyBattleInputToBattle({
             battle,
+            bossConfig,
             telegramUserId: input.telegramUserId,
             key: input.key,
             inputAt: now
         });
 
-        const updatedRaid = buildRaidAfterBattleChange(
-            raidAfterMisses,
-            inputResult.battle,
-            now
-        );
+        const updatedRaid = buildRaidAfterBattleChange({
+            raid: raidAfterMisses,
+            battle: inputResult.battle,
+            finishedAt: now
+        });
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -452,7 +466,13 @@ export class RaidService {
         }
 
         const now = Date.now();
-        const result = resolveMissedNotesInBattle(raid.battle, now);
+        const bossConfig = resolveBattleBossConfig(raid.battle);
+
+        const result = resolveMissedNotesInBattle({
+            battle: raid.battle,
+            bossConfig,
+            now
+        });
 
         if (result.resolvedCount <= 0) {
             return {
@@ -462,7 +482,11 @@ export class RaidService {
             };
         }
 
-        const updatedRaid = buildRaidAfterBattleChange(raid, result.battle, now);
+        const updatedRaid = buildRaidAfterBattleChange({
+            raid,
+            battle: result.battle,
+            finishedAt: now
+        });
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -508,10 +532,13 @@ export class RaidService {
             };
         }
 
-        const battleWithFinalMisses = resolveAllPendingNotesAsMissed(
-            raid.battle,
+        const bossConfig = resolveBattleBossConfig(raid.battle);
+
+        const battleWithFinalMisses = resolveAllPendingNotesAsMissed({
+            battle: raid.battle,
+            bossConfig,
             now
-        );
+        });
 
         const updatedRaid = finishBattleRaid({
             raid,
@@ -595,7 +622,11 @@ export class RaidService {
             updatedBattlePlayer
         );
 
-        const updatedRaid = buildRaidAfterBattleChange(raid, battleWithPlayer, now);
+        const updatedRaid = buildRaidAfterBattleChange({
+            raid,
+            battle: battleWithPlayer,
+            finishedAt: now
+        });
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -622,30 +653,60 @@ export class RaidService {
 
     private createBattleState(input: {
         raid: Raid;
+        bossConfig: BossConfig;
         startedAt: number;
     }): BattleState {
         const players = Object.values(input.raid.players);
         const playerCount = players.length;
-        const bossMaxHp = calculateBossHp(playerCount);
+        const bossMaxHp = calculateBossHp({
+            playerCount,
+            bossConfig: input.bossConfig
+        });
+
+        const endsAt = input.startedAt + input.bossConfig.durationSeconds * 1000;
+        const introEndsAt = input.startedAt + input.bossConfig.note.introCountdownMs;
+        const noteSeed = createBattleNoteSeed({
+            raidId: input.raid.id,
+            bossId: input.bossConfig.id,
+            startedAt: input.startedAt
+        });
 
         return {
             status: "active",
             outcome: null,
+
+            bossId: input.bossConfig.id,
+            noteSeed,
+
             startedAt: input.startedAt,
-            endsAt: input.startedAt + BATTLE_DURATION_SECONDS * 1000,
-            durationSeconds: BATTLE_DURATION_SECONDS,
+            introEndsAt,
+            endsAt,
+            durationSeconds: input.bossConfig.durationSeconds,
+
             boss: {
-                id: "meme-boss-001",
-                name: "Meme Boss",
+                id: input.bossConfig.id,
+                level: input.bossConfig.level,
+                name: input.bossConfig.name,
+                subtitle: input.bossConfig.subtitle,
+                assetSlug: input.bossConfig.assetSlug,
+
                 hp: bossMaxHp,
                 maxHp: bossMaxHp,
                 phase: "idle"
             },
-            players: createBattlePlayers(players),
+
+            players: createBattlePlayers({
+                players,
+                bossConfig: input.bossConfig
+            }),
+
+
             notesByPlayer: createBattleNotesByPlayer({
                 players,
+                bossConfig: input.bossConfig,
                 startedAt: input.startedAt,
-                endsAt: input.startedAt + BATTLE_DURATION_SECONDS * 1000
+                endsAt,
+                noteSeed
             })
         };
     }
@@ -661,18 +722,19 @@ export class RaidService {
     }
 }
 
-function createBattlePlayers(
-    players: RaidPlayer[]
-): Record<string, BattlePlayerState> {
+function createBattlePlayers(input: {
+    players: RaidPlayer[];
+    bossConfig: BossConfig;
+}): Record<string, BattlePlayerState> {
     return Object.fromEntries(
-        players.map((player) => [
+        input.players.map((player) => [
             player.telegramUserId,
             {
                 telegramUserId: player.telegramUserId,
                 displayName: player.displayName,
 
-                hp: PLAYER_MAX_HP,
-                maxHp: PLAYER_MAX_HP,
+                hp: input.bossConfig.playerMaxHp,
+                maxHp: input.bossConfig.playerMaxHp,
 
                 combo: 0,
                 maxCombo: 0,
@@ -699,8 +761,10 @@ function createBattlePlayers(
 
 function createBattleNotesByPlayer(input: {
     players: RaidPlayer[];
+    bossConfig: BossConfig;
     startedAt: number;
     endsAt: number;
+    noteSeed: string;
 }): Record<string, BattleNote[]> {
     return Object.fromEntries(
         input.players.map((player, playerIndex) => [
@@ -708,8 +772,10 @@ function createBattleNotesByPlayer(input: {
             createBattleNotesForPlayer({
                 telegramUserId: player.telegramUserId,
                 playerIndex,
+                bossConfig: input.bossConfig,
                 startedAt: input.startedAt,
-                endsAt: input.endsAt
+                endsAt: input.endsAt,
+                noteSeed: input.noteSeed
             })
         ])
     );
@@ -718,22 +784,42 @@ function createBattleNotesByPlayer(input: {
 function createBattleNotesForPlayer(input: {
     telegramUserId: string;
     playerIndex: number;
+    bossConfig: BossConfig;
     startedAt: number;
     endsAt: number;
+    noteSeed: string;
 }): BattleNote[] {
     const notes: BattleNote[] = [];
-    const firstHitAt = input.startedAt + BATTLE_NOTE_FIRST_HIT_DELAY_MS;
-    const lastHitAt = input.endsAt - BATTLE_NOTE_MISS_WINDOW_MS;
+    const firstHitAt =
+        input.startedAt +
+        input.bossConfig.note.introCountdownMs +
+        input.bossConfig.note.firstHitDelayMs;
+    const lastHitAt = input.endsAt - input.bossConfig.note.missWindowMs;
+
+    const random = createSeededRandom(
+        `${input.noteSeed}:${input.telegramUserId}:${input.playerIndex}`
+    );
+
+    let previousKey: BattleInputKey | null = null;
+    let repeatCount = 0;
 
     for (
         let hitAt = firstHitAt, noteIndex = 0;
         hitAt <= lastHitAt;
-        hitAt += BATTLE_NOTE_INTERVAL_MS, noteIndex += 1
+        hitAt += input.bossConfig.note.intervalMs, noteIndex += 1
     ) {
-        const key =
-            BATTLE_INPUT_KEYS[
-            (noteIndex + input.playerIndex) % BATTLE_INPUT_KEYS.length
-                ];
+        const key = pickBattleInputKey({
+            random,
+            previousKey,
+            repeatCount
+        });
+
+        if (key === previousKey) {
+            repeatCount += 1;
+        } else {
+            previousKey = key;
+            repeatCount = 1;
+        }
 
         notes.push({
             id: nanoid(10),
@@ -752,6 +838,7 @@ function createBattleNotesForPlayer(input: {
 
 function applyBattleInputToBattle(input: {
     battle: BattleState;
+    bossConfig: BossConfig;
     telegramUserId: string;
     key: BattleInputKey;
     inputAt: number;
@@ -766,7 +853,8 @@ function applyBattleInputToBattle(input: {
     const notes = input.battle.notesByPlayer[input.telegramUserId] ?? [];
     const candidate = findClosestPendingNote({
         notes,
-        inputAt: input.inputAt
+        inputAt: input.inputAt,
+        missWindowMs: input.bossConfig.note.missWindowMs
     });
 
     if (!candidate) {
@@ -776,15 +864,15 @@ function applyBattleInputToBattle(input: {
             key: input.key,
             inputAt: input.inputAt,
             rating: "wrong",
-            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE
+            damageTaken: input.bossConfig.scoring.wrongPlayerDamage
         });
 
         return {
             battle: updateBattlePlayer(input.battle, updatedPlayer),
             noteId: null,
             rating: "wrong",
-            damageDealt: BATTLE_WRONG_DAMAGE,
-            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE,
+            damageDealt: input.bossConfig.scoring.wrongDamage,
+            damageTaken: input.bossConfig.scoring.wrongPlayerDamage,
             combo: updatedPlayer.combo
         };
     }
@@ -796,20 +884,23 @@ function applyBattleInputToBattle(input: {
             key: input.key,
             inputAt: input.inputAt,
             rating: "wrong",
-            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE
+            damageTaken: input.bossConfig.scoring.wrongPlayerDamage
         });
 
         return {
             battle: updateBattlePlayer(input.battle, updatedPlayer),
             noteId: candidate.note.id,
             rating: "wrong",
-            damageDealt: BATTLE_WRONG_DAMAGE,
-            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE,
+            damageDealt: input.bossConfig.scoring.wrongDamage,
+            damageTaken: input.bossConfig.scoring.wrongPlayerDamage,
             combo: updatedPlayer.combo
         };
     }
 
-    const rating = getRatingFromTiming(candidate.distanceMs);
+    const rating = getRatingFromTiming({
+        distanceMs: candidate.distanceMs,
+        bossConfig: input.bossConfig
+    });
 
     if (rating === "miss") {
         const player = input.battle.players[input.telegramUserId];
@@ -818,7 +909,7 @@ function applyBattleInputToBattle(input: {
             key: input.key,
             inputAt: input.inputAt,
             rating: "miss",
-            damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+            damageTaken: input.bossConfig.scoring.missPlayerDamage
         });
 
         const battleWithMissedNote = updateBattleNote({
@@ -838,15 +929,19 @@ function applyBattleInputToBattle(input: {
             battle: updateBattlePlayer(battleWithMissedNote, updatedPlayer),
             noteId: candidate.note.id,
             rating: "miss",
-            damageDealt: BATTLE_MISS_DAMAGE,
-            damageTaken: BATTLE_MISS_PLAYER_DAMAGE,
+            damageDealt: input.bossConfig.scoring.missDamage,
+            damageTaken: input.bossConfig.scoring.missPlayerDamage,
             combo: updatedPlayer.combo
         };
     }
 
     const player = input.battle.players[input.telegramUserId];
     const nextCombo = player.combo + 1;
-    const damage = getDamageForRating(rating, nextCombo);
+    const damage = getDamageForRating({
+        rating,
+        combo: nextCombo,
+        bossConfig: input.bossConfig
+    });
 
     const bossDamageResult = applyBossDamageToBattle({
         battle: input.battle,
@@ -884,14 +979,17 @@ function applyBattleInputToBattle(input: {
     };
 }
 
-function resolveMissedNotesInBattle(
-    battle: BattleState,
-    now: number
-): { battle: BattleState; resolvedCount: number } {
+function resolveMissedNotesInBattle(input: {
+    battle: BattleState;
+    bossConfig: BossConfig;
+    now: number;
+}): { battle: BattleState; resolvedCount: number } {
     let resolvedCount = 0;
-    let nextBattle = battle;
+    let nextBattle = input.battle;
 
-    for (const [telegramUserId, notes] of Object.entries(battle.notesByPlayer)) {
+    for (const [telegramUserId, notes] of Object.entries(
+        input.battle.notesByPlayer
+    )) {
         const player = nextBattle.players[telegramUserId];
 
         if (!player) {
@@ -906,7 +1004,7 @@ function resolveMissedNotesInBattle(
                 return note;
             }
 
-            if (now <= note.hitAt + BATTLE_NOTE_MISS_WINDOW_MS) {
+            if (input.now <= note.hitAt + input.bossConfig.note.missWindowMs) {
                 return note;
             }
 
@@ -919,7 +1017,7 @@ function resolveMissedNotesInBattle(
                     key: null,
                     inputAt: null,
                     rating: "miss",
-                    damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+                    damageTaken: input.bossConfig.scoring.missPlayerDamage
                 });
             }
 
@@ -927,7 +1025,7 @@ function resolveMissedNotesInBattle(
                 ...note,
                 status: "missed",
                 rating: "miss",
-                resolvedAt: now,
+                resolvedAt: input.now,
                 inputAt: null
             };
         });
@@ -953,13 +1051,16 @@ function resolveMissedNotesInBattle(
     };
 }
 
-function resolveAllPendingNotesAsMissed(
-    battle: BattleState,
-    now: number
-): BattleState {
-    let nextBattle = battle;
+function resolveAllPendingNotesAsMissed(input: {
+    battle: BattleState;
+    bossConfig: BossConfig;
+    now: number;
+}): BattleState {
+    let nextBattle = input.battle;
 
-    for (const [telegramUserId, notes] of Object.entries(battle.notesByPlayer)) {
+    for (const [telegramUserId, notes] of Object.entries(
+        input.battle.notesByPlayer
+    )) {
         const player = nextBattle.players[telegramUserId];
 
         if (!player) {
@@ -982,7 +1083,7 @@ function resolveAllPendingNotesAsMissed(
                     key: null,
                     inputAt: null,
                     rating: "miss",
-                    damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+                    damageTaken: input.bossConfig.scoring.missPlayerDamage
                 });
             }
 
@@ -990,7 +1091,7 @@ function resolveAllPendingNotesAsMissed(
                 ...note,
                 status: "missed",
                 rating: "miss",
-                resolvedAt: now,
+                resolvedAt: input.now,
                 inputAt: null
             };
         });
@@ -1016,6 +1117,7 @@ function resolveAllPendingNotesAsMissed(
 function findClosestPendingNote(input: {
     notes: BattleNote[];
     inputAt: number;
+    missWindowMs: number;
 }): BattleInputCandidate | null {
     let bestCandidate: BattleInputCandidate | null = null;
 
@@ -1026,7 +1128,7 @@ function findClosestPendingNote(input: {
 
         const distanceMs = Math.abs(note.hitAt - input.inputAt);
 
-        if (distanceMs > BATTLE_NOTE_MISS_WINDOW_MS) {
+        if (distanceMs > input.missWindowMs) {
             return;
         }
 
@@ -1042,32 +1144,54 @@ function findClosestPendingNote(input: {
     return bestCandidate;
 }
 
-function getRatingFromTiming(
-    distanceMs: number
-): Exclude<BattleInputRating, "wrong"> {
-    if (distanceMs <= BATTLE_NOTE_PERFECT_WINDOW_MS) {
+function getRatingFromTiming(input: {
+    distanceMs: number;
+    bossConfig: BossConfig;
+}): Exclude<BattleInputRating, "wrong"> {
+    if (input.distanceMs <= input.bossConfig.note.perfectWindowMs) {
         return "perfect";
     }
 
-    if (distanceMs <= BATTLE_NOTE_GOOD_WINDOW_MS) {
+    if (input.distanceMs <= input.bossConfig.note.goodWindowMs) {
         return "good";
     }
 
     return "miss";
 }
 
-function getDamageForRating(
-    rating: Exclude<BattleInputRating, "miss" | "wrong">,
-    combo: number
-): number {
+function getDamageForRating(input: {
+    rating: Exclude<BattleInputRating, "miss" | "wrong">;
+    combo: number;
+    bossConfig: BossConfig;
+}): number {
     const baseDamage =
-        rating === "perfect" ? BATTLE_PERFECT_DAMAGE : BATTLE_GOOD_DAMAGE;
+        input.rating === "perfect"
+            ? input.bossConfig.scoring.perfectDamage
+            : input.bossConfig.scoring.goodDamage;
 
-    return baseDamage + getComboBonusDamage(combo);
+    return (
+        baseDamage +
+        getComboBonusDamage({
+            combo: input.combo,
+            bossConfig: input.bossConfig
+        })
+    );
 }
 
-function getComboBonusDamage(combo: number): number {
-    return Math.min(30, Math.floor(combo / 5) * 5);
+function getComboBonusDamage(input: {
+    combo: number;
+    bossConfig: BossConfig;
+}): number {
+    const scoring = input.bossConfig.scoring;
+
+    if (scoring.comboBonusEvery <= 0 || scoring.comboBonusStep <= 0) {
+        return 0;
+    }
+
+    return Math.min(
+        scoring.comboBonusCap,
+        Math.floor(input.combo / scoring.comboBonusEvery) * scoring.comboBonusStep
+    );
 }
 
 function applySuccessfulInputToPlayer(input: {
@@ -1092,6 +1216,8 @@ function applySuccessfulInputToPlayer(input: {
             input.rating === "good"
                 ? input.player.goodCount + 1
                 : input.player.goodCount,
+        isStunned: false,
+        stunnedUntil: null,
         lastInputKey: input.key,
         lastInputAt: input.inputAt,
         lastRating: input.rating,
@@ -1173,7 +1299,7 @@ function applyBossDamageToBattle(input: {
     battle: BattleState;
     damage: number;
 }): { battle: BattleState; damageDealt: number } {
-    const damageDealt = Math.min(input.damage, input.battle.boss.hp);
+    const damageDealt = Math.min(Math.max(0, input.damage), input.battle.boss.hp);
     const nextBossHp = Math.max(0, input.battle.boss.hp - damageDealt);
 
     return {
@@ -1222,39 +1348,43 @@ function updateBattleNote(input: {
     };
 }
 
-function buildRaidAfterBattleChange(
-    raid: Raid,
-    battle: BattleState,
-    finishedAt: number
-): Raid {
-    if (battle.boss.hp <= 0) {
+function buildRaidAfterBattleChange(input: {
+    raid: Raid;
+    battle: BattleState;
+    finishedAt: number;
+}): Raid {
+    if (input.battle.boss.hp <= 0) {
         return finishBattleRaid({
-            raid,
-            battle,
-            finishedAt,
+            raid: input.raid,
+            battle: input.battle,
+            finishedAt: input.finishedAt,
             outcome: "win"
         });
     }
 
-    if (areAllPlayersDefeated(battle)) {
+    if (areAllPlayersDefeated(input.battle)) {
         return finishBattleRaid({
-            raid,
-            battle,
-            finishedAt,
+            raid: input.raid,
+            battle: input.battle,
+            finishedAt: input.finishedAt,
             outcome: "lose"
         });
     }
 
     return {
-        ...raid,
+        ...input.raid,
+        bossId: input.battle.bossId,
         status: "battle",
         battle: {
-            ...battle,
+            ...input.battle,
             status: "active",
             outcome: null,
             boss: {
-                ...battle.boss,
-                phase: getBossPhaseAfterDamage(battle.boss.hp, battle.boss.maxHp)
+                ...input.battle.boss,
+                phase: getBossPhaseAfterDamage(
+                    input.battle.boss.hp,
+                    input.battle.boss.maxHp
+                )
             }
         }
     };
@@ -1268,7 +1398,9 @@ function finishBattleRaid(input: {
 }): Raid {
     return {
         ...input.raid,
+        bossId: input.battle.bossId,
         status: "finished",
+        expiresAt: input.finishedAt + BATTLE_RESULT_TTL_SECONDS * 1000,
         battle: {
             ...input.battle,
             status: "finished",
@@ -1298,20 +1430,18 @@ function isPlayerDefeated(player: BattlePlayerState): boolean {
     return player.hp <= 0;
 }
 
-function calculateBossHp(playerCount: number): number {
-    const multipliers: Record<number, number> = {
-        1: 1.0,
-        2: 1.7,
-        3: 2.5,
-        4: 3.3,
-        5: 4.1,
-        6: 4.8
-    };
+function calculateBossHp(input: {
+    playerCount: number;
+    bossConfig: BossConfig;
+}): number {
+    const safePlayerCount = Math.min(
+        Math.max(input.playerCount, 1),
+        6
+    ) as keyof BossHpMultiplierByPlayers;
 
-    const safePlayerCount = Math.min(Math.max(playerCount, 1), 6);
-    const multiplier = multipliers[safePlayerCount];
+    const multiplier = input.bossConfig.hpMultiplierByPlayers[safePlayerCount];
 
-    return Math.round(BASE_BOSS_HP * multiplier);
+    return Math.round(input.bossConfig.baseHp * multiplier);
 }
 
 function getBossPhaseAfterDamage(currentHp: number, maxHp: number): BossPhase {
@@ -1328,6 +1458,62 @@ function getBossPhaseAfterDamage(currentHp: number, maxHp: number): BossPhase {
     }
 
     return "idle";
+}
+
+function resolveRaidBossConfig(raid: Raid): BossConfig {
+    return getBossConfig(raid.bossId ?? raid.battle?.bossId ?? raid.battle?.boss.id);
+}
+
+function resolveBattleBossConfig(battle: BattleState): BossConfig {
+    return getBossConfig(battle.bossId ?? battle.boss.id);
+}
+
+function createBattleNoteSeed(input: {
+    raidId: string;
+    bossId: string;
+    startedAt: number;
+}): string {
+    return `${input.raidId}:${input.bossId}:${input.startedAt}`;
+}
+
+function pickBattleInputKey(input: {
+    random: RandomGenerator;
+    previousKey: BattleInputKey | null;
+    repeatCount: number;
+}): BattleInputKey {
+    const allowedKeys =
+        input.previousKey && input.repeatCount >= 2
+            ? BATTLE_INPUT_KEYS.filter((key) => key !== input.previousKey)
+            : [...BATTLE_INPUT_KEYS];
+
+    const index = Math.floor(input.random() * allowedKeys.length);
+
+    return allowedKeys[Math.min(index, allowedKeys.length - 1)];
+}
+
+function createSeededRandom(seed: string): RandomGenerator {
+    let state = hashStringToUint32(seed);
+
+    return () => {
+        state += 0x6d2b79f5;
+
+        let value = state;
+        value = Math.imul(value ^ (value >>> 15), value | 1);
+        value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+
+        return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function hashStringToUint32(value: string): number {
+    let hash = 2166136261;
+
+    for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    return hash >>> 0;
 }
 
 function isBattleInputKey(key: string): key is BattleInputKey {

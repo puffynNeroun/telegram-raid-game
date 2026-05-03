@@ -60,6 +60,13 @@
             linear-gradient(180deg, rgba(2, 4, 10, 0.18) 0%, transparent 26%, rgba(2, 4, 10, 0.28) 58%, rgba(2, 4, 10, 0.86) 100%);
 }
 
+.raid-battle-stage.is-intro::before {
+    background:
+            radial-gradient(circle at 50% 28%, rgba(96, 165, 250, 0.16), transparent 28%),
+            radial-gradient(circle at 50% 72%, transparent 32%, rgba(0, 0, 0, 0.7) 100%),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.56), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.56));
+}
+
 .raid-battle-stage.is-concluded::before {
     background:
             radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.1), transparent 26%),
@@ -112,6 +119,7 @@
 .raid-player-mini-stat,
 .raid-spectator-panel,
 .raid-input-dock,
+.raid-intro-dock,
 .raid-conclusion-dock {
     border: 1px solid rgba(226, 232, 240, 0.14);
     background:
@@ -190,6 +198,10 @@
     text-transform: capitalize;
 }
 
+.raid-battle-stage.is-intro .raid-battle-state strong {
+    color: #bfdbfe;
+}
+
 .raid-battle-stage.is-victory .raid-battle-state strong {
     color: #86efac;
 }
@@ -252,6 +264,10 @@
     font-weight: 950;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+.raid-battle-stage.is-intro .raid-boss-title strong {
+    color: #bfdbfe;
 }
 
 .raid-battle-stage.is-victory .raid-boss-title strong {
@@ -327,6 +343,12 @@
     background:
             radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.055), transparent 25%),
             linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.18) 42%, rgba(0, 0, 0, 0.86) 100%);
+}
+
+.raid-battle-stage.is-intro .raid-arena-vignette {
+    background:
+            radial-gradient(circle at 50% 31%, rgba(96, 165, 250, 0.1), transparent 26%),
+            linear-gradient(180deg, rgba(0, 0, 0, 0.14) 0%, rgba(0, 0, 0, 0.22) 42%, rgba(0, 0, 0, 0.86) 100%);
 }
 
 .raid-battle-stage.is-concluded .raid-arena-vignette {
@@ -407,6 +429,11 @@
     right: 8px;
     top: 34px;
     justify-items: end;
+}
+
+.raid-battle-stage.is-intro .raid-side-stats {
+    opacity: 0.64;
+    filter: saturate(0.75);
 }
 
 .raid-battle-stage.is-concluded .raid-side-stats {
@@ -702,11 +729,98 @@
     color: #fca5a5;
 }
 
+.raid-battle-intro {
+    position: absolute;
+    left: 50%;
+    top: 43%;
+    z-index: 96;
+    width: min(calc(100% - 48px), 300px);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: raidIntroEnter 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.raid-battle-intro::before {
+    content: "";
+    position: absolute;
+    inset: -90px -50px;
+    z-index: -2;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(96, 165, 250, 0.2), transparent 60%);
+    filter: blur(4px);
+    animation: raidAnnouncementGlow 900ms ease-in-out infinite alternate;
+}
+
+.raid-battle-intro-frame {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 18px 16px 16px;
+    border: 1px solid rgba(96, 165, 250, 0.26);
+    border-radius: 24px;
+    background:
+            radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.08), transparent 52%),
+            linear-gradient(180deg, rgba(15, 23, 42, 0.74), rgba(2, 6, 23, 0.84));
+    box-shadow:
+            0 28px 56px rgba(0, 0, 0, 0.42),
+            0 0 38px rgba(96, 165, 250, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    text-align: center;
+    backdrop-filter: blur(18px);
+}
+
+.raid-battle-intro-frame::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+            linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    transform: translateX(-120%);
+    animation: raidAnnouncementSweep 1200ms 120ms ease-out both;
+}
+
+.raid-battle-intro-kicker {
+    color: #93c5fd;
+    font-size: 10px;
+    font-weight: 1000;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+}
+
+.raid-battle-intro-count {
+    color: #f8fafc;
+    font-family:
+            Impact,
+            Haettenschweiler,
+            "Arial Narrow Bold",
+            system-ui,
+            sans-serif;
+    font-size: clamp(54px, 18vw, 86px);
+    font-weight: 1000;
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
+    text-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.52),
+            0 0 26px rgba(96, 165, 250, 0.18);
+}
+
+.raid-battle-intro p {
+    max-width: 220px;
+    margin: 0;
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 .raid-battle-announcement {
     position: absolute;
     left: 50%;
-    top: 12%;
-    z-index: 9999;
+    top: 22%;
+    z-index: 96;
     width: min(calc(100% - 44px), 312px);
     transform: translate(-50%, -50%);
     pointer-events: none;
@@ -1041,6 +1155,7 @@
 }
 
 .raid-spectator-panel,
+.raid-intro-dock,
 .raid-conclusion-dock {
     display: grid;
     gap: 4px;
@@ -1050,16 +1165,28 @@
 }
 
 .raid-spectator-panel strong,
+.raid-intro-dock strong,
 .raid-conclusion-dock strong {
     color: #f8fafc;
     font-size: 15px;
 }
 
 .raid-spectator-panel span,
+.raid-intro-dock span,
 .raid-conclusion-dock span {
     color: #94a3b8;
     font-size: 12px;
     line-height: 1.4;
+}
+
+.raid-intro-dock {
+    border-color: rgba(96, 165, 250, 0.24);
+    background:
+            linear-gradient(180deg, rgba(30, 64, 175, 0.2), rgba(2, 6, 23, 0.72));
+}
+
+.raid-intro-dock strong {
+    color: #bfdbfe;
 }
 
 .raid-conclusion-dock.is-victory {
@@ -1151,6 +1278,26 @@
 
     to {
         filter: brightness(1.16);
+    }
+}
+
+@keyframes raidIntroEnter {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -42%) scale(0.9);
+        filter: blur(7px);
+    }
+
+    70% {
+        opacity: 1;
+        transform: translate(-50%, -51%) scale(1.03);
+        filter: blur(0);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+        filter: blur(0);
     }
 }
 
@@ -1337,8 +1484,27 @@
         font-size: 11px;
     }
 
+    .raid-battle-intro {
+        top: 42%;
+        width: min(calc(100% - 30px), 284px);
+    }
+
+    .raid-battle-intro-frame {
+        padding: 16px 14px 14px;
+        border-radius: 22px;
+    }
+
+    .raid-battle-intro-count {
+        font-size: clamp(48px, 17vw, 74px);
+    }
+
+    .raid-battle-intro p {
+        max-width: 200px;
+        font-size: 11px;
+    }
+
     .raid-battle-announcement {
-        top: 37%;
+        top: 24%;
         width: min(calc(100% - 26px), 292px);
     }
 
