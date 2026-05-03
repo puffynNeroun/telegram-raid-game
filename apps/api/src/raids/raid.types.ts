@@ -224,7 +224,8 @@ export type BattleAttackResult =
         | "raid_not_found"
         | "no_active_battle"
         | "battle_expired"
-        | "player_not_in_battle";
+        | "player_not_in_battle"
+        | "player_defeated";
 };
 
 export type BattleInputActionInput = {
@@ -252,6 +253,7 @@ export type BattleInputActionResult =
         | "battle_expired"
         | "player_not_in_battle"
         | "player_stunned"
+        | "player_defeated"
         | "invalid_input_key";
 };
 

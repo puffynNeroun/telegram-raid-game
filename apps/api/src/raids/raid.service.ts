@@ -12,7 +12,6 @@ import type {
     BossPhase,
     CreateRaidInput,
     CreateRaidResult,
-    FinalizeExpiredBattleResult,
     JoinRaidInput,
     JoinRaidResult,
     Raid,
@@ -22,7 +21,8 @@ import type {
     SetReadyInput,
     SetReadyResult,
     StartRaidInput,
-    StartRaidResult
+    StartRaidResult,
+    FinalizeExpiredBattleResult
 } from "./raid.types.js";
 import {
     BASE_BOSS_HP,
@@ -39,7 +39,6 @@ import {
     BATTLE_NOTE_PERFECT_WINDOW_MS,
     BATTLE_PERFECT_DAMAGE,
     BATTLE_RESULT_TTL_SECONDS,
-    BATTLE_STUN_DURATION_MS,
     BATTLE_WRONG_DAMAGE,
     BATTLE_WRONG_PLAYER_DAMAGE,
     MAX_PLAYERS_PER_RAID,
@@ -60,7 +59,8 @@ type ApplyBattleDamageResult =
         | "raid_not_found"
         | "no_active_battle"
         | "battle_expired"
-        | "player_not_in_battle";
+        | "player_not_in_battle"
+        | "player_defeated";
 };
 
 type BattleInputCandidate = {
@@ -353,19 +353,39 @@ export class RaidService {
             };
         }
 
-        let battle = raid.battle;
-        const missedResult = resolveMissedNotesInBattle(battle, now);
+        const missedResult = resolveMissedNotesInBattle(raid.battle, now);
+        const raidAfterMisses = buildRaidAfterBattleChange(
+            {
+                ...raid,
+                battle: missedResult.battle
+            },
+            missedResult.battle,
+            now
+        );
 
-        battle = missedResult.battle;
+        if (raidAfterMisses.status === "finished") {
+            await this.raidRepository.saveRaid(raidAfterMisses);
 
-        let battlePlayer = battle.players[input.telegramUserId];
+            return {
+                ok: false,
+                reason: "player_defeated"
+            };
+        }
+
+        const battle = raidAfterMisses.battle;
+
+        if (!battle || battle.status !== "active") {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        const battlePlayer = battle.players[input.telegramUserId];
 
         if (!battlePlayer) {
             if (missedResult.resolvedCount > 0) {
-                await this.raidRepository.saveRaid({
-                    ...raid,
-                    battle
-                });
+                await this.raidRepository.saveRaid(raidAfterMisses);
             }
 
             return {
@@ -374,20 +394,14 @@ export class RaidService {
             };
         }
 
-        battlePlayer = normalizePlayerStun(battlePlayer, now);
-        battle = updateBattlePlayer(battle, battlePlayer);
-
-        if (isPlayerStunned(battlePlayer, now)) {
+        if (isPlayerDefeated(battlePlayer)) {
             if (missedResult.resolvedCount > 0) {
-                await this.raidRepository.saveRaid({
-                    ...raid,
-                    battle
-                });
+                await this.raidRepository.saveRaid(raidAfterMisses);
             }
 
             return {
                 ok: false,
-                reason: "player_stunned"
+                reason: "player_defeated"
             };
         }
 
@@ -398,7 +412,11 @@ export class RaidService {
             inputAt: now
         });
 
-        const updatedRaid = buildRaidAfterBattleChange(raid, inputResult.battle);
+        const updatedRaid = buildRaidAfterBattleChange(
+            raidAfterMisses,
+            inputResult.battle,
+            now
+        );
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -433,7 +451,8 @@ export class RaidService {
             };
         }
 
-        const result = resolveMissedNotesInBattle(raid.battle, Date.now());
+        const now = Date.now();
+        const result = resolveMissedNotesInBattle(raid.battle, now);
 
         if (result.resolvedCount <= 0) {
             return {
@@ -443,10 +462,7 @@ export class RaidService {
             };
         }
 
-        const updatedRaid: Raid = {
-            ...raid,
-            battle: result.battle
-        };
+        const updatedRaid = buildRaidAfterBattleChange(raid, result.battle, now);
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -483,7 +499,9 @@ export class RaidService {
             };
         }
 
-        if (Date.now() < raid.battle.endsAt) {
+        const now = Date.now();
+
+        if (now < raid.battle.endsAt) {
             return {
                 ok: false,
                 reason: "battle_not_expired"
@@ -492,27 +510,15 @@ export class RaidService {
 
         const battleWithFinalMisses = resolveAllPendingNotesAsMissed(
             raid.battle,
-            Date.now()
+            now
         );
 
-        const updatedRaid: Raid = {
-            ...raid,
-            status: "finished",
-            battle: {
-                ...battleWithFinalMisses,
-                status: "finished",
-                outcome: "lose",
-                boss: {
-                    ...battleWithFinalMisses.boss,
-                    phase:
-                        battleWithFinalMisses.boss.hp <= 0
-                            ? "defeated"
-                            : battleWithFinalMisses.boss.hp <= battleWithFinalMisses.boss.maxHp * 0.3
-                                ? "rage"
-                                : battleWithFinalMisses.boss.phase
-                }
-            }
-        };
+        const updatedRaid = finishBattleRaid({
+            raid,
+            battle: battleWithFinalMisses,
+            finishedAt: now,
+            outcome: battleWithFinalMisses.boss.hp <= 0 ? "win" : "lose"
+        });
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -544,7 +550,9 @@ export class RaidService {
             };
         }
 
-        if (Date.now() >= raid.battle.endsAt) {
+        const now = Date.now();
+
+        if (now >= raid.battle.endsAt) {
             return {
                 ok: false,
                 reason: "battle_expired"
@@ -560,6 +568,13 @@ export class RaidService {
             };
         }
 
+        if (isPlayerDefeated(battlePlayer)) {
+            return {
+                ok: false,
+                reason: "player_defeated"
+            };
+        }
+
         const damageResult = applyBossDamageToBattle({
             battle: raid.battle,
             damage: input.damage
@@ -569,7 +584,7 @@ export class RaidService {
             ...battlePlayer,
             damage: battlePlayer.damage + damageResult.damageDealt,
             lastInputKey: null,
-            lastInputAt: Date.now(),
+            lastInputAt: now,
             lastRating: null,
             lastDamageDealt: damageResult.damageDealt,
             lastDamageTaken: 0
@@ -580,7 +595,7 @@ export class RaidService {
             updatedBattlePlayer
         );
 
-        const updatedRaid = buildRaidAfterBattleChange(raid, battleWithPlayer);
+        const updatedRaid = buildRaidAfterBattleChange(raid, battleWithPlayer, now);
 
         await this.raidRepository.saveRaid(updatedRaid);
 
@@ -715,9 +730,10 @@ function createBattleNotesForPlayer(input: {
         hitAt <= lastHitAt;
         hitAt += BATTLE_NOTE_INTERVAL_MS, noteIndex += 1
     ) {
-        const key = BATTLE_INPUT_KEYS[
-        (noteIndex + input.playerIndex) % BATTLE_INPUT_KEYS.length
-            ];
+        const key =
+            BATTLE_INPUT_KEYS[
+            (noteIndex + input.playerIndex) % BATTLE_INPUT_KEYS.length
+                ];
 
         notes.push({
             id: nanoid(10),
@@ -897,13 +913,15 @@ function resolveMissedNotesInBattle(
             resolvedCount += 1;
             didChangeNotes = true;
 
-            nextPlayer = applyFailedInputToPlayer({
-                player: nextPlayer,
-                key: null,
-                inputAt: null,
-                rating: "miss",
-                damageTaken: BATTLE_MISS_PLAYER_DAMAGE
-            });
+            if (!isPlayerDefeated(nextPlayer)) {
+                nextPlayer = applyFailedInputToPlayer({
+                    player: nextPlayer,
+                    key: null,
+                    inputAt: null,
+                    rating: "miss",
+                    damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+                });
+            }
 
             return {
                 ...note,
@@ -958,13 +976,15 @@ function resolveAllPendingNotesAsMissed(
 
             didChangeNotes = true;
 
-            nextPlayer = applyFailedInputToPlayer({
-                player: nextPlayer,
-                key: null,
-                inputAt: null,
-                rating: "miss",
-                damageTaken: BATTLE_MISS_PLAYER_DAMAGE
-            });
+            if (!isPlayerDefeated(nextPlayer)) {
+                nextPlayer = applyFailedInputToPlayer({
+                    player: nextPlayer,
+                    key: null,
+                    inputAt: null,
+                    rating: "miss",
+                    damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+                });
+            }
 
             return {
                 ...note,
@@ -1072,8 +1092,6 @@ function applySuccessfulInputToPlayer(input: {
             input.rating === "good"
                 ? input.player.goodCount + 1
                 : input.player.goodCount,
-        isStunned: false,
-        stunnedUntil: null,
         lastInputKey: input.key,
         lastInputAt: input.inputAt,
         lastRating: input.rating,
@@ -1089,10 +1107,20 @@ function applyFailedInputToPlayer(input: {
     rating: Extract<BattleInputRating, "miss" | "wrong">;
     damageTaken: number;
 }): BattlePlayerState {
+    if (isPlayerDefeated(input.player)) {
+        return {
+            ...input.player,
+            lastInputKey: input.key,
+            lastInputAt: input.inputAt,
+            lastRating: input.rating,
+            lastDamageDealt: 0,
+            lastDamageTaken: 0
+        };
+    }
+
     const damagedPlayer = applyPlayerDamage({
         player: input.player,
-        damageTaken: input.damageTaken,
-        now: input.inputAt ?? Date.now()
+        damageTaken: input.damageTaken
     });
 
     return {
@@ -1117,13 +1145,12 @@ function applyFailedInputToPlayer(input: {
 function applyPlayerDamage(input: {
     player: BattlePlayerState;
     damageTaken: number;
-    now: number;
 }): BattlePlayerState {
-    if (input.damageTaken <= 0) {
+    if (input.damageTaken <= 0 || isPlayerDefeated(input.player)) {
         return input.player;
     }
 
-    const nextHp = input.player.hp - input.damageTaken;
+    const nextHp = Math.max(0, input.player.hp - input.damageTaken);
 
     if (nextHp > 0) {
         return {
@@ -1134,35 +1161,12 @@ function applyPlayerDamage(input: {
 
     return {
         ...input.player,
-        hp: input.player.maxHp,
+        hp: 0,
         combo: 0,
         deaths: input.player.deaths + 1,
-        isStunned: true,
-        stunnedUntil: input.now + BATTLE_STUN_DURATION_MS
-    };
-}
-
-function normalizePlayerStun(
-    player: BattlePlayerState,
-    now: number
-): BattlePlayerState {
-    if (!player.isStunned) {
-        return player;
-    }
-
-    if (!player.stunnedUntil || now < player.stunnedUntil) {
-        return player;
-    }
-
-    return {
-        ...player,
         isStunned: false,
         stunnedUntil: null
     };
-}
-
-function isPlayerStunned(player: BattlePlayerState, now: number): boolean {
-    return Boolean(player.isStunned && player.stunnedUntil && now < player.stunnedUntil);
 }
 
 function applyBossDamageToBattle(input: {
@@ -1218,24 +1222,80 @@ function updateBattleNote(input: {
     };
 }
 
-function buildRaidAfterBattleChange(raid: Raid, battle: BattleState): Raid {
-    const isBossDefeated = battle.boss.hp <= 0;
+function buildRaidAfterBattleChange(
+    raid: Raid,
+    battle: BattleState,
+    finishedAt: number
+): Raid {
+    if (battle.boss.hp <= 0) {
+        return finishBattleRaid({
+            raid,
+            battle,
+            finishedAt,
+            outcome: "win"
+        });
+    }
+
+    if (areAllPlayersDefeated(battle)) {
+        return finishBattleRaid({
+            raid,
+            battle,
+            finishedAt,
+            outcome: "lose"
+        });
+    }
 
     return {
         ...raid,
-        status: isBossDefeated ? "finished" : "battle",
+        status: "battle",
         battle: {
             ...battle,
-            status: isBossDefeated ? "finished" : "active",
-            outcome: isBossDefeated ? "win" : null,
+            status: "active",
+            outcome: null,
             boss: {
                 ...battle.boss,
-                phase: isBossDefeated
-                    ? "defeated"
-                    : getBossPhaseAfterDamage(battle.boss.hp, battle.boss.maxHp)
+                phase: getBossPhaseAfterDamage(battle.boss.hp, battle.boss.maxHp)
             }
         }
     };
+}
+
+function finishBattleRaid(input: {
+    raid: Raid;
+    battle: BattleState;
+    finishedAt: number;
+    outcome: Exclude<BattleState["outcome"], null>;
+}): Raid {
+    return {
+        ...input.raid,
+        status: "finished",
+        battle: {
+            ...input.battle,
+            status: "finished",
+            outcome: input.outcome,
+            endsAt: input.finishedAt,
+            boss: {
+                ...input.battle.boss,
+                phase:
+                    input.outcome === "win"
+                        ? "defeated"
+                        : getBossPhaseAfterDamage(
+                            input.battle.boss.hp,
+                            input.battle.boss.maxHp
+                        )
+            }
+        }
+    };
+}
+
+function areAllPlayersDefeated(battle: BattleState): boolean {
+    const players = Object.values(battle.players);
+
+    return players.length > 0 && players.every(isPlayerDefeated);
+}
+
+function isPlayerDefeated(player: BattlePlayerState): boolean {
+    return player.hp <= 0;
 }
 
 function calculateBossHp(playerCount: number): number {
