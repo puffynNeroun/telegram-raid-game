@@ -207,16 +207,17 @@ export function setupSocketServer({
                 const result = await raidService.applyBattleAttack(parsedPayload);
 
                 if (!result.ok) {
-                    const finalized = await finalizeBattleIfExpired({
+                    const handled = await handleFailedBattleAction({
                         io,
+                        socket,
                         raidService,
                         raidId: parsedPayload.raidId,
+                        reason: result.reason,
                         finalizationTimers: battleFinalizationTimers,
-                        missedNotesTimers: missedNotesResolutionTimers,
-                        reason: result.reason
+                        missedNotesTimers: missedNotesResolutionTimers
                     });
 
-                    if (finalized) {
+                    if (handled) {
                         return;
                     }
 
@@ -227,15 +228,12 @@ export function setupSocketServer({
                     return;
                 }
 
-                if (result.raid.status === "finished") {
-                    clearRaidBattleTimers({
-                        raidId: result.raid.id,
-                        finalizationTimers: battleFinalizationTimers,
-                        missedNotesTimers: missedNotesResolutionTimers
-                    });
-                }
-
-                emitRaidStateToRoom(io, result.raid);
+                handleSuccessfulBattleAction({
+                    io,
+                    raid: result.raid,
+                    finalizationTimers: battleFinalizationTimers,
+                    missedNotesTimers: missedNotesResolutionTimers
+                });
             } catch (error) {
                 emitInternalSocketError(socket, error);
             }
@@ -256,16 +254,17 @@ export function setupSocketServer({
                 const result = await raidService.applyBattleInput(parsedPayload);
 
                 if (!result.ok) {
-                    const finalized = await finalizeBattleIfExpired({
+                    const handled = await handleFailedBattleAction({
                         io,
+                        socket,
                         raidService,
                         raidId: parsedPayload.raidId,
+                        reason: result.reason,
                         finalizationTimers: battleFinalizationTimers,
-                        missedNotesTimers: missedNotesResolutionTimers,
-                        reason: result.reason
+                        missedNotesTimers: missedNotesResolutionTimers
                     });
 
-                    if (finalized) {
+                    if (handled) {
                         return;
                     }
 
@@ -276,15 +275,12 @@ export function setupSocketServer({
                     return;
                 }
 
-                if (result.raid.status === "finished") {
-                    clearRaidBattleTimers({
-                        raidId: result.raid.id,
-                        finalizationTimers: battleFinalizationTimers,
-                        missedNotesTimers: missedNotesResolutionTimers
-                    });
-                }
-
-                emitRaidStateToRoom(io, result.raid);
+                handleSuccessfulBattleAction({
+                    io,
+                    raid: result.raid,
+                    finalizationTimers: battleFinalizationTimers,
+                    missedNotesTimers: missedNotesResolutionTimers
+                });
             } catch (error) {
                 emitInternalSocketError(socket, error);
             }
@@ -334,25 +330,86 @@ function emitInternalSocketError(socket: RaidSocket, error: unknown): void {
     });
 }
 
+function handleSuccessfulBattleAction({
+                                          io,
+                                          raid,
+                                          finalizationTimers,
+                                          missedNotesTimers
+                                      }: {
+    io: RaidSocketServer;
+    raid: Raid;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
+}): void {
+    if (raid.status === "finished") {
+        clearRaidBattleTimers({
+            raidId: raid.id,
+            finalizationTimers,
+            missedNotesTimers
+        });
+    }
+
+    emitRaidStateToRoom(io, raid);
+}
+
+async function handleFailedBattleAction({
+                                            io,
+                                            socket,
+                                            raidService,
+                                            raidId,
+                                            reason,
+                                            finalizationTimers,
+                                            missedNotesTimers
+                                        }: {
+    io: RaidSocketServer;
+    socket: RaidSocket;
+    raidService: RaidService;
+    raidId: string;
+    reason: string;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
+}): Promise<boolean> {
+    if (reason === "battle_expired") {
+        return finalizeBattleIfExpired({
+            io,
+            raidService,
+            raidId,
+            finalizationTimers,
+            missedNotesTimers
+        });
+    }
+
+    if (reason === "player_defeated" || reason === "no_active_battle") {
+        const emitted = await emitCurrentRaidStateIfFinished({
+            io,
+            socket,
+            raidService,
+            raidId,
+            finalizationTimers,
+            missedNotesTimers
+        });
+
+        if (emitted) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 async function finalizeBattleIfExpired({
                                            io,
                                            raidService,
                                            raidId,
                                            finalizationTimers,
-                                           missedNotesTimers,
-                                           reason
+                                           missedNotesTimers
                                        }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raidId: string;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
-    reason: string;
 }): Promise<boolean> {
-    if (reason !== "battle_expired") {
-        return false;
-    }
-
     const finalizeResult = await raidService.finalizeExpiredBattle(raidId);
 
     if (!finalizeResult.ok) {
@@ -366,6 +423,43 @@ async function finalizeBattleIfExpired({
     });
 
     emitRaidStateToRoom(io, finalizeResult.raid);
+
+    return true;
+}
+
+async function emitCurrentRaidStateIfFinished({
+                                                  io,
+                                                  socket,
+                                                  raidService,
+                                                  raidId,
+                                                  finalizationTimers,
+                                                  missedNotesTimers
+                                              }: {
+    io: RaidSocketServer;
+    socket: RaidSocket;
+    raidService: RaidService;
+    raidId: string;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
+}): Promise<boolean> {
+    const raid = await raidService.getRaid(raidId);
+
+    if (!raid) {
+        return false;
+    }
+
+    if (raid.status !== "finished") {
+        emitRaidStateToSocket(socket, raid);
+        return false;
+    }
+
+    clearRaidBattleTimers({
+        raidId,
+        finalizationTimers,
+        missedNotesTimers
+    });
+
+    emitRaidStateToRoom(io, raid);
 
     return true;
 }
@@ -617,6 +711,12 @@ async function resolveMissedNotesByTimer({
             raidId,
             reason: result.reason
         });
+
+        const raid = await raidService.getRaid(raidId);
+
+        if (raid?.status === "finished") {
+            emitRaidStateToRoom(io, raid);
+        }
 
         return;
     }
