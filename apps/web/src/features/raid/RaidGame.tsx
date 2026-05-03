@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { formatTimeLeft } from "./time";
 import { getCurrentUser, initTelegramWebApp } from "./telegram";
 import { useRaidLobby } from "./useRaidLobby";
-import type { BattleInputKey } from "./types";
+import type { BattleInputKey, BattleInputRating, BattleNote } from "./types";
 
 const BATTLE_INPUT_CONTROLS: Array<{
     key: BattleInputKey;
@@ -31,6 +31,14 @@ const BATTLE_INPUT_CONTROLS: Array<{
     }
 ];
 
+const NOTE_LOOK_BEHIND_MS = 650;
+const NOTE_LOOK_AHEAD_MS = 3200;
+const MAX_VISIBLE_NOTES = 8;
+
+const UI_PERFECT_WINDOW_MS = 140;
+const UI_GOOD_WINDOW_MS = 320;
+const UI_MISS_WINDOW_MS = 560;
+
 export function RaidGame() {
     const params = useMemo(() => new URLSearchParams(window.location.search), []);
     const raidId = params.get("raidId");
@@ -47,6 +55,7 @@ export function RaidGame() {
         localNow,
         socketStatus,
         socketError,
+        gameError,
         isJoining,
         isReadyUpdating,
         isStarting,
@@ -63,17 +72,33 @@ export function RaidGame() {
 
     const battle = raid?.battle ?? null;
     const currentBattlePlayer = battle?.players[currentUser.id] ?? null;
+    const currentPlayerNotes = battle?.notesByPlayer[currentUser.id] ?? [];
+
+    const visibleNotes = useMemo(() => {
+        return getVisibleNotes(currentPlayerNotes, localNow);
+    }, [currentPlayerNotes, localNow]);
+
+    const currentTargetNote = useMemo(() => {
+        return getCurrentTargetNote(currentPlayerNotes, localNow);
+    }, [currentPlayerNotes, localNow]);
 
     const bossHpPercent = battle
         ? getBossHpPercent(battle.boss.hp, battle.boss.maxHp)
         : 100;
 
-    const battleTimeLeft = battle
-        ? formatTimeLeft(battle.endsAt, localNow)
-        : null;
+    const battleTimeLeft = battle ? formatClock(battle.endsAt, localNow) : null;
+
+    const isCurrentPlayerStunned = Boolean(
+        currentBattlePlayer &&
+        currentBattlePlayer.isStunned &&
+        currentBattlePlayer.stunnedUntil &&
+        currentBattlePlayer.stunnedUntil > localNow
+    );
 
     const canSendBattleInput = Boolean(
-        battle?.status === "active" && currentBattlePlayer
+        battle?.status === "active" &&
+        currentBattlePlayer &&
+        !isCurrentPlayerStunned
     );
 
     useEffect(() => {
@@ -188,10 +213,18 @@ export function RaidGame() {
 
                     {socketError && (
                         <p>
-                            Socket error: <span>{socketError}</span>
+                            Connection error: <span>{socketError}</span>
+                        </p>
+                    )}
+
+                    {gameError && (
+                        <p>
+                            Game warning: <span>{gameError}</span>
                         </p>
                     )}
                 </div>
+
+                {gameError && <div className="game-error-banner">{gameError}</div>}
 
                 {raidState.status === "loading" && (
                     <section className="panel">
@@ -225,7 +258,7 @@ export function RaidGame() {
                                 <strong>
                                     {battle
                                         ? battleTimeLeft
-                                        : formatTimeLeft(raidState.raid.expiresAt, localNow)}
+                                        : formatClock(raidState.raid.expiresAt, localNow)}
                                 </strong>
                             </div>
                         </section>
@@ -275,10 +308,129 @@ export function RaidGame() {
                                     </div>
                                 </div>
 
+                                {currentBattlePlayer && (
+                                    <section className="player-combat-panel">
+                                        <div className="player-combat-grid">
+                                            <div className="combat-stat">
+                                                <span>Your HP</span>
+                                                <strong>
+                                                    {currentBattlePlayer.hp}/{currentBattlePlayer.maxHp}
+                                                </strong>
+                                            </div>
+
+                                            <div className="combat-stat">
+                                                <span>Combo</span>
+                                                <strong>{currentBattlePlayer.combo}</strong>
+                                            </div>
+
+                                            <div className="combat-stat">
+                                                <span>Max combo</span>
+                                                <strong>{currentBattlePlayer.maxCombo}</strong>
+                                            </div>
+
+                                            <div className="combat-stat">
+                                                <span>Deaths</span>
+                                                <strong>{currentBattlePlayer.deaths}</strong>
+                                            </div>
+                                        </div>
+
+                                        {currentBattlePlayer.lastRating && (
+                                            <div
+                                                className={`rating-feedback ${getRatingClassName(
+                                                    currentBattlePlayer.lastRating
+                                                )}`}
+                                            >
+                                                <strong>{formatRating(currentBattlePlayer.lastRating)}</strong>
+
+                                                <span>
+                          {currentBattlePlayer.lastDamageDealt > 0
+                              ? `+${currentBattlePlayer.lastDamageDealt} dmg`
+                              : currentBattlePlayer.lastDamageTaken > 0
+                                  ? `-${currentBattlePlayer.lastDamageTaken} HP`
+                                  : "No damage"}
+                        </span>
+                                            </div>
+                                        )}
+
+                                        {isCurrentPlayerStunned && (
+                                            <div className="stun-warning">
+                                                Stunned for{" "}
+                                                {formatStunTimeLeft(currentBattlePlayer.stunnedUntil, localNow)}
+                                            </div>
+                                        )}
+                                    </section>
+                                )}
+
                                 {battle.status === "active" && (
                                     <div className="battle-actions">
                                         {currentBattlePlayer ? (
                                             <>
+                                                <section className="current-note-panel">
+                                                    <span className="current-note-label">Current target</span>
+
+                                                    {currentTargetNote ? (
+                                                        <div
+                                                            className={`current-note-target current-note-${currentTargetNote.key} ${getNoteTimingClassName(
+                                                                currentTargetNote,
+                                                                localNow
+                                                            )}`}
+                                                        >
+                              <span className="current-note-symbol">
+                                {formatInputKey(currentTargetNote.key)}
+                              </span>
+
+                                                            <span className="current-note-time">
+                                {formatNoteDelta(currentTargetNote.hitAt, localNow)}
+                              </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="current-note-empty">
+                                                            Waiting for next note
+                                                        </div>
+                                                    )}
+                                                </section>
+
+                                                <section className="note-lanes" aria-label="Upcoming battle notes">
+                                                    <div className="note-lanes-header">
+                                                        <span>Upcoming notes</span>
+
+                                                        {currentTargetNote ? (
+                                                            <strong>
+                                                                Next: {formatInputKey(currentTargetNote.key)} ·{" "}
+                                                                {formatNoteDelta(currentTargetNote.hitAt, localNow)}
+                                                            </strong>
+                                                        ) : (
+                                                            <strong>No pending notes</strong>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="note-list">
+                                                        {visibleNotes.length > 0 ? (
+                                                            visibleNotes.map((note) => (
+                                                                <div
+                                                                    className={`note-chip note-chip-${note.key} ${getNoteTimingClassName(
+                                                                        note,
+                                                                        localNow
+                                                                    )}`}
+                                                                    key={note.id}
+                                                                >
+                                  <span className="note-symbol">
+                                    {formatInputKey(note.key)}
+                                  </span>
+
+                                                                    <span className="note-time">
+                                    {formatNoteDelta(note.hitAt, localNow)}
+                                  </span>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <p className="hint-text note-empty">
+                                                                Waiting for the next server note.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </section>
+
                                                 <div className="input-pad" aria-label="Battle input controls">
                                                     {BATTLE_INPUT_CONTROLS.map((control) => (
                                                         <button
@@ -292,6 +444,7 @@ export function RaidGame() {
                               <span className="input-button-symbol">
                                 {control.label}
                               </span>
+
                                                             <span className="input-button-label">
                                 {control.keyboardLabel}
                               </span>
@@ -302,7 +455,7 @@ export function RaidGame() {
                                                 <p className="hint-text input-hint">
                                                     {isInputSending
                                                         ? "Syncing input with server..."
-                                                        : "Tap arrows on mobile or use keyboard arrows on desktop."}
+                                                        : "Hit the current target. Keyboard: arrows or WASD."}
                                                 </p>
                                             </>
                                         ) : (
@@ -352,7 +505,7 @@ export function RaidGame() {
                             {player.isHost ? "Host" : "Player"}
                                                         {player.telegramUserId === currentUser.id ? " · You" : ""}
                                                         {battlePlayer
-                                                            ? ` · HP ${battlePlayer.hp}/${battlePlayer.maxHp}`
+                                                            ? ` · HP ${battlePlayer.hp}/${battlePlayer.maxHp} · Combo ${battlePlayer.combo}`
                                                             : ""}
                           </span>
                                                 </div>
@@ -430,6 +583,42 @@ export function RaidGame() {
             </section>
         </main>
     );
+}
+
+function getVisibleNotes(notes: BattleNote[], now: number): BattleNote[] {
+    if (now <= 0) {
+        return [];
+    }
+
+    return notes
+        .filter((note) => {
+            if (note.status !== "pending") {
+                return false;
+            }
+
+            return (
+                note.hitAt >= now - NOTE_LOOK_BEHIND_MS &&
+                note.hitAt <= now + NOTE_LOOK_AHEAD_MS
+            );
+        })
+        .sort((a, b) => a.hitAt - b.hitAt)
+        .slice(0, MAX_VISIBLE_NOTES);
+}
+
+function getCurrentTargetNote(notes: BattleNote[], now: number): BattleNote | null {
+    if (now <= 0) {
+        return null;
+    }
+
+    const pendingNotes = notes
+        .filter((note) => note.status === "pending")
+        .sort((a, b) => a.hitAt - b.hitAt);
+
+    const activeCandidate = pendingNotes.find((note) => {
+        return note.hitAt >= now - NOTE_LOOK_BEHIND_MS;
+    });
+
+    return activeCandidate ?? pendingNotes[0] ?? null;
 }
 
 function getBattleInputKeyFromKeyboard(key: string): BattleInputKey | null {
@@ -521,7 +710,7 @@ function getBattleDescription(
     outcome: "win" | "lose" | null
 ): string {
     if (status === "active") {
-        return "Use the four battle inputs to damage the boss.";
+        return "Hit matching notes inside the timing window.";
     }
 
     if (outcome === "win") {
@@ -533,4 +722,108 @@ function getBattleDescription(
     }
 
     return "The battle has ended.";
+}
+
+function getNoteTimingClassName(note: BattleNote, now: number): string {
+    if (now <= 0) {
+        return "is-upcoming";
+    }
+
+    const deltaMs = note.hitAt - now;
+
+    if (deltaMs < -UI_MISS_WINDOW_MS) {
+        return "is-late";
+    }
+
+    if (Math.abs(deltaMs) <= UI_PERFECT_WINDOW_MS) {
+        return "is-hit-window";
+    }
+
+    if (Math.abs(deltaMs) <= UI_GOOD_WINDOW_MS) {
+        return "is-good-window";
+    }
+
+    if (Math.abs(deltaMs) <= UI_MISS_WINDOW_MS) {
+        return "is-miss-window";
+    }
+
+    if (deltaMs <= 900) {
+        return "is-soon";
+    }
+
+    return "is-upcoming";
+}
+
+function formatNoteDelta(hitAt: number, now: number): string {
+    if (now <= 0) {
+        return "sync";
+    }
+
+    const deltaMs = hitAt - now;
+    const absSeconds = Math.abs(deltaMs) / 1000;
+
+    if (Math.abs(deltaMs) <= 80) {
+        return "now";
+    }
+
+    if (deltaMs > 0) {
+        return `in ${absSeconds.toFixed(1)}s`;
+    }
+
+    return `${absSeconds.toFixed(1)}s late`;
+}
+
+function formatClock(timestamp: number, now: number): string {
+    if (now <= 0) {
+        return "--";
+    }
+
+    return formatTimeLeft(timestamp, now);
+}
+
+function formatInputKey(key: BattleInputKey): string {
+    switch (key) {
+        case "left":
+            return "←";
+        case "up":
+            return "↑";
+        case "down":
+            return "↓";
+        case "right":
+            return "→";
+    }
+}
+
+function formatRating(rating: BattleInputRating): string {
+    switch (rating) {
+        case "perfect":
+            return "Perfect";
+        case "good":
+            return "Good";
+        case "miss":
+            return "Miss";
+        case "wrong":
+            return "Wrong";
+    }
+}
+
+function getRatingClassName(rating: BattleInputRating): string {
+    switch (rating) {
+        case "perfect":
+            return "is-perfect";
+        case "good":
+            return "is-good";
+        case "miss":
+            return "is-miss";
+        case "wrong":
+            return "is-wrong";
+    }
+}
+
+function formatStunTimeLeft(stunnedUntil: number | null, now: number): string {
+    if (!stunnedUntil || stunnedUntil <= now || now <= 0) {
+        return "0.0s";
+    }
+
+    return `${((stunnedUntil - now) / 1000).toFixed(1)}s`;
 }
