@@ -3,7 +3,7 @@ import { LobbyActions } from "../components/LobbyActions";
 import { PlayerList } from "../components/PlayerList";
 import { RaidMetaPanel } from "../components/RaidMetaPanel";
 import { formatClock } from "../components/battleUi";
-import type { CurrentUser, Raid, RaidPlayer, SocketStatus } from "../types";
+import type { BossId, CurrentUser, Raid, RaidPlayer, SocketStatus } from "../types";
 
 type RaidLobbyScreenProps = {
     raid: Raid;
@@ -26,6 +26,8 @@ type RaidLobbyScreenProps = {
     onStart: () => void;
 };
 
+const MAX_BOSS_LEVEL = 6;
+
 export function RaidLobbyScreen({
                                     raid,
                                     raidId,
@@ -47,7 +49,10 @@ export function RaidLobbyScreen({
                                     onStart
                                 }: RaidLobbyScreenProps) {
     const expiresIn = formatClock(raid.expiresAt, localNow);
+    const bossLevel = getBossLevelFromRaid(raid);
+    const bossProgressLabel = `Boss ${bossLevel} / ${MAX_BOSS_LEVEL}`;
     const isUserInLobby = Boolean(currentPlayer);
+
     const actionStateLabel = getActionStateLabel({
         isUserInLobby,
         canStart,
@@ -80,12 +85,9 @@ export function RaidLobbyScreen({
 
                 <section className="raid-lobby-hero" aria-label="Raid preparation">
                     <div className="raid-lobby-hero-copy">
-                        <span>Boss 1 / 6</span>
-                        <h2>Prepare your squad</h2>
-                        <p>
-                            Join the lobby, mark yourself ready, then start the raid when
-                            the squad is prepared.
-                        </p>
+                        <span>{bossProgressLabel}</span>
+                        <h2>{getLobbyTitle({ isUserInLobby, canStart })}</h2>
+                        <p>{getLobbyDescription({ isUserInLobby, canStart })}</p>
                     </div>
 
                     <div className="raid-lobby-hero-state">
@@ -95,7 +97,11 @@ export function RaidLobbyScreen({
                 </section>
 
                 <section className="raid-lobby-boss-shell" aria-label="Raid boss">
-                    <BossPanel battle={raid.battle} raidStatus={raid.status} />
+                    <BossPanel
+                        battle={raid.battle}
+                        raidStatus={raid.status}
+                        bossId={raid.bossId}
+                    />
                 </section>
 
                 <section className="raid-lobby-status-grid" aria-label="Lobby status">
@@ -173,6 +179,61 @@ export function RaidLobbyScreen({
             </section>
         </main>
     );
+}
+
+function getLobbyTitle({
+                           isUserInLobby,
+                           canStart
+                       }: {
+    isUserInLobby: boolean;
+    canStart: boolean;
+}): string {
+    if (canStart) {
+        return "Squad is ready";
+    }
+
+    if (isUserInLobby) {
+        return "Prepare your squad";
+    }
+
+    return "Join the raid";
+}
+
+function getLobbyDescription({
+                                 isUserInLobby,
+                                 canStart
+                             }: {
+    isUserInLobby: boolean;
+    canStart: boolean;
+}): string {
+    if (canStart) {
+        return "Everyone needed is ready. The host can open the arena and start the boss fight.";
+    }
+
+    if (isUserInLobby) {
+        return "Mark yourself ready, wait for the squad, then enter the boss fight when the host starts.";
+    }
+
+    return "Take a slot in the squad, mark yourself ready, and prepare for the rhythm battle.";
+}
+
+function getBossLevelFromRaid(raid: Raid): number {
+    if (raid.battle?.boss.level) {
+        return raid.battle.boss.level;
+    }
+
+    return getBossLevelFromBossId(raid.bossId);
+}
+
+function getBossLevelFromBossId(bossId: BossId): number {
+    const match = bossId.match(/^boss-(\d+)$/);
+    const parsedLevel = match ? Number.parseInt(match[1], 10) : 1;
+
+    if (!Number.isFinite(parsedLevel)) {
+        return 1;
+    }
+
+    return Math.min(Math.max(parsedLevel, 1), MAX_BOSS_LEVEL);
 }
 
 function getActionStateLabel({
