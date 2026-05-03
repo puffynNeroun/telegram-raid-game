@@ -1,33 +1,38 @@
 export const RAID_TTL_SECONDS = 120;
 export const MAX_PLAYERS_PER_RAID = 6;
 
-export const BATTLE_DURATION_SECONDS = 60;
-export const BATTLE_RESULT_TTL_SECONDS = 120;
+export const BATTLE_RESULT_TTL_SECONDS = 180;
 
-export const BASE_BOSS_HP = 1000;
+export const BATTLE_INPUT_KEYS = ["left", "up", "down", "right"] as const;
+
+/**
+ * Legacy fallback constants.
+ * Main battle balance now lives in boss.config.ts.
+ */
+export const BATTLE_DURATION_SECONDS = 95;
+export const BASE_BOSS_HP = 3200;
 export const PLAYER_MAX_HP = 100;
 
-export const BATTLE_ATTACK_DAMAGE = 50;
-export const BATTLE_INPUT_DAMAGE = 25;
+export const BATTLE_ATTACK_DAMAGE = 0;
+export const BATTLE_INPUT_DAMAGE = 0;
 
-export const BATTLE_NOTE_FIRST_HIT_DELAY_MS = 1800;
-export const BATTLE_NOTE_INTERVAL_MS = 850;
-export const BATTLE_NOTE_VISIBLE_AHEAD_MS = 1800;
+export const BATTLE_NOTE_INTRO_COUNTDOWN_MS = 3000;
+export const BATTLE_NOTE_FIRST_HIT_DELAY_MS = 1500;
+export const BATTLE_NOTE_INTERVAL_MS = 900;
+export const BATTLE_NOTE_VISIBLE_AHEAD_MS = 2800;
 
-export const BATTLE_NOTE_PERFECT_WINDOW_MS = 90;
-export const BATTLE_NOTE_GOOD_WINDOW_MS = 180;
-export const BATTLE_NOTE_MISS_WINDOW_MS = 320;
+export const BATTLE_NOTE_PERFECT_WINDOW_MS = 95;
+export const BATTLE_NOTE_GOOD_WINDOW_MS = 185;
+export const BATTLE_NOTE_MISS_WINDOW_MS = 325;
 
-export const BATTLE_PERFECT_DAMAGE = 55;
-export const BATTLE_GOOD_DAMAGE = 35;
+export const BATTLE_PERFECT_DAMAGE = 46;
+export const BATTLE_GOOD_DAMAGE = 30;
 export const BATTLE_WRONG_DAMAGE = 0;
 export const BATTLE_MISS_DAMAGE = 0;
 
 export const BATTLE_WRONG_PLAYER_DAMAGE = 8;
-export const BATTLE_MISS_PLAYER_DAMAGE = 12;
-export const BATTLE_STUN_DURATION_MS = 900;
-
-export const BATTLE_INPUT_KEYS = ["left", "up", "down", "right"] as const;
+export const BATTLE_MISS_PLAYER_DAMAGE = 11;
+export const BATTLE_STUN_DURATION_MS = 800;
 
 export type RaidStatus = "lobby" | "cancelled" | "battle" | "finished";
 
@@ -40,6 +45,63 @@ export type BattleInputKey = (typeof BATTLE_INPUT_KEYS)[number];
 export type BattleNoteStatus = "pending" | "hit" | "missed";
 export type BattleInputRating = "perfect" | "good" | "miss" | "wrong";
 
+export type BossId =
+    | "boss-001"
+    | "boss-002"
+    | "boss-003"
+    | "boss-004"
+    | "boss-005"
+    | "boss-006";
+
+export type BossHpMultiplierByPlayers = Record<1 | 2 | 3 | 4 | 5 | 6, number>;
+
+export type BossNoteConfig = {
+    introCountdownMs: number;
+
+    firstHitDelayMs: number;
+    intervalMs: number;
+    visibleAheadMs: number;
+
+    perfectWindowMs: number;
+    goodWindowMs: number;
+    missWindowMs: number;
+};
+
+export type BossScoringConfig = {
+    attackDamage: number;
+
+    perfectDamage: number;
+    goodDamage: number;
+    wrongDamage: number;
+    missDamage: number;
+
+    wrongPlayerDamage: number;
+    missPlayerDamage: number;
+
+    stunDurationMs: number;
+
+    comboBonusEvery: number;
+    comboBonusStep: number;
+    comboBonusCap: number;
+};
+
+export type BossConfig = {
+    id: BossId;
+    level: number;
+    name: string;
+    subtitle: string;
+    assetSlug: string;
+
+    durationSeconds: number;
+    baseHp: number;
+    playerMaxHp: number;
+
+    hpMultiplierByPlayers: BossHpMultiplierByPlayers;
+
+    note: BossNoteConfig;
+    scoring: BossScoringConfig;
+};
+
 export type RaidPlayer = {
     telegramUserId: string;
     displayName: string;
@@ -49,8 +111,12 @@ export type RaidPlayer = {
 };
 
 export type BattleBossState = {
-    id: string;
+    id: BossId;
+    level: number;
     name: string;
+    subtitle: string;
+    assetSlug: string;
+
     hp: number;
     maxHp: number;
     phase: BossPhase;
@@ -98,7 +164,11 @@ export type BattleState = {
     status: BattleStatus;
     outcome: BattleOutcome;
 
+    bossId: BossId;
+    noteSeed: string;
+
     startedAt: number;
+    introEndsAt: number;
     endsAt: number;
     durationSeconds: number;
 
@@ -110,12 +180,16 @@ export type BattleState = {
 
 export type Raid = {
     id: string;
+    bossId: BossId;
+
     telegramChatId: string;
     hostTelegramUserId: string;
     hostDisplayName: string;
+
     status: RaidStatus;
     createdAt: number;
     expiresAt: number;
+
     players: Record<string, RaidPlayer>;
     battle: BattleState | null;
 };
@@ -124,6 +198,7 @@ export type CreateRaidInput = {
     telegramChatId: string;
     hostTelegramUserId: string;
     hostDisplayName: string;
+    bossId?: BossId;
 };
 
 export type CreateRaidResult =
