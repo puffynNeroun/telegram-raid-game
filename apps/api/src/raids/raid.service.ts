@@ -5,6 +5,8 @@ import type {
     BattleInputActionInput,
     BattleInputActionResult,
     BattleInputKey,
+    BattleInputRating,
+    BattleNote,
     BattlePlayerState,
     BattleState,
     BossPhase,
@@ -15,6 +17,8 @@ import type {
     JoinRaidResult,
     Raid,
     RaidPlayer,
+    ResolveMissedNotesInput,
+    ResolveMissedNotesResult,
     SetReadyInput,
     SetReadyResult,
     StartRaidInput,
@@ -24,12 +28,46 @@ import {
     BASE_BOSS_HP,
     BATTLE_ATTACK_DAMAGE,
     BATTLE_DURATION_SECONDS,
-    BATTLE_INPUT_DAMAGE,
+    BATTLE_GOOD_DAMAGE,
+    BATTLE_INPUT_KEYS,
+    BATTLE_MISS_DAMAGE,
+    BATTLE_MISS_PLAYER_DAMAGE,
+    BATTLE_NOTE_FIRST_HIT_DELAY_MS,
+    BATTLE_NOTE_GOOD_WINDOW_MS,
+    BATTLE_NOTE_INTERVAL_MS,
+    BATTLE_NOTE_MISS_WINDOW_MS,
+    BATTLE_NOTE_PERFECT_WINDOW_MS,
+    BATTLE_PERFECT_DAMAGE,
     BATTLE_RESULT_TTL_SECONDS,
+    BATTLE_STUN_DURATION_MS,
+    BATTLE_WRONG_DAMAGE,
+    BATTLE_WRONG_PLAYER_DAMAGE,
     MAX_PLAYERS_PER_RAID,
+    PLAYER_MAX_HP,
     RAID_TTL_SECONDS
 } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
+
+type ApplyBattleDamageResult =
+    | {
+    ok: true;
+    raid: Raid;
+    damageDealt: number;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "no_active_battle"
+        | "battle_expired"
+        | "player_not_in_battle";
+};
+
+type BattleInputCandidate = {
+    note: BattleNote;
+    noteIndex: number;
+    distanceMs: number;
+};
 
 export class RaidService {
     constructor(private readonly raidRepository: RaidRepository) {}
@@ -290,21 +328,132 @@ export class RaidService {
             };
         }
 
-        const result = await this.applyBattleDamage({
-            raidId: input.raidId,
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        if (!this.isActiveBattleRaid(raid)) {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        const now = Date.now();
+
+        if (now >= raid.battle.endsAt) {
+            return {
+                ok: false,
+                reason: "battle_expired"
+            };
+        }
+
+        let battle = raid.battle;
+        const missedResult = resolveMissedNotesInBattle(battle, now);
+
+        battle = missedResult.battle;
+
+        let battlePlayer = battle.players[input.telegramUserId];
+
+        if (!battlePlayer) {
+            if (missedResult.resolvedCount > 0) {
+                await this.raidRepository.saveRaid({
+                    ...raid,
+                    battle
+                });
+            }
+
+            return {
+                ok: false,
+                reason: "player_not_in_battle"
+            };
+        }
+
+        battlePlayer = normalizePlayerStun(battlePlayer, now);
+        battle = updateBattlePlayer(battle, battlePlayer);
+
+        if (isPlayerStunned(battlePlayer, now)) {
+            if (missedResult.resolvedCount > 0) {
+                await this.raidRepository.saveRaid({
+                    ...raid,
+                    battle
+                });
+            }
+
+            return {
+                ok: false,
+                reason: "player_stunned"
+            };
+        }
+
+        const inputResult = applyBattleInputToBattle({
+            battle,
             telegramUserId: input.telegramUserId,
-            damage: BATTLE_INPUT_DAMAGE
+            key: input.key,
+            inputAt: now
         });
 
-        if (!result.ok) {
-            return result;
-        }
+        const updatedRaid = buildRaidAfterBattleChange(raid, inputResult.battle);
+
+        await this.raidRepository.saveRaid(updatedRaid);
 
         return {
             ok: true,
-            raid: result.raid,
+            raid: updatedRaid,
             key: input.key,
-            damageDealt: result.damageDealt
+            noteId: inputResult.noteId,
+            rating: inputResult.rating,
+            damageDealt: inputResult.damageDealt,
+            damageTaken: inputResult.damageTaken,
+            combo: inputResult.combo
+        };
+    }
+
+    async resolveMissedNotes(
+        input: ResolveMissedNotesInput
+    ): Promise<ResolveMissedNotesResult> {
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        if (!this.isActiveBattleRaid(raid)) {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        const result = resolveMissedNotesInBattle(raid.battle, Date.now());
+
+        if (result.resolvedCount <= 0) {
+            return {
+                ok: true,
+                raid,
+                resolvedCount: 0
+            };
+        }
+
+        const updatedRaid: Raid = {
+            ...raid,
+            battle: result.battle
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid,
+            resolvedCount: result.resolvedCount
         };
     }
 
@@ -341,21 +490,26 @@ export class RaidService {
             };
         }
 
+        const battleWithFinalMisses = resolveAllPendingNotesAsMissed(
+            raid.battle,
+            Date.now()
+        );
+
         const updatedRaid: Raid = {
             ...raid,
             status: "finished",
             battle: {
-                ...raid.battle,
+                ...battleWithFinalMisses,
                 status: "finished",
                 outcome: "lose",
                 boss: {
-                    ...raid.battle.boss,
+                    ...battleWithFinalMisses.boss,
                     phase:
-                        raid.battle.boss.hp <= 0
+                        battleWithFinalMisses.boss.hp <= 0
                             ? "defeated"
-                            : raid.battle.boss.hp <= raid.battle.boss.maxHp * 0.3
+                            : battleWithFinalMisses.boss.hp <= battleWithFinalMisses.boss.maxHp * 0.3
                                 ? "rage"
-                                : raid.battle.boss.phase
+                                : battleWithFinalMisses.boss.phase
                 }
             }
         };
@@ -373,21 +527,7 @@ export class RaidService {
         raidId: string;
         telegramUserId: string;
         damage: number;
-    }): Promise<
-        | {
-        ok: true;
-        raid: Raid;
-        damageDealt: number;
-    }
-        | {
-        ok: false;
-        reason:
-            | "raid_not_found"
-            | "no_active_battle"
-            | "battle_expired"
-            | "player_not_in_battle";
-    }
-    > {
+    }): Promise<ApplyBattleDamageResult> {
         const raid = await this.raidRepository.getRaid(input.raidId);
 
         if (!raid) {
@@ -420,40 +560,34 @@ export class RaidService {
             };
         }
 
-        const damageDealt = Math.min(input.damage, raid.battle.boss.hp);
-        const nextBossHp = Math.max(0, raid.battle.boss.hp - damageDealt);
-        const isBossDefeated = nextBossHp <= 0;
+        const damageResult = applyBossDamageToBattle({
+            battle: raid.battle,
+            damage: input.damage
+        });
 
         const updatedBattlePlayer: BattlePlayerState = {
             ...battlePlayer,
-            damage: battlePlayer.damage + damageDealt
+            damage: battlePlayer.damage + damageResult.damageDealt,
+            lastInputKey: null,
+            lastInputAt: Date.now(),
+            lastRating: null,
+            lastDamageDealt: damageResult.damageDealt,
+            lastDamageTaken: 0
         };
 
-        const updatedRaid: Raid = {
-            ...raid,
-            status: isBossDefeated ? "finished" : "battle",
-            battle: {
-                ...raid.battle,
-                status: isBossDefeated ? "finished" : "active",
-                outcome: isBossDefeated ? "win" : null,
-                boss: {
-                    ...raid.battle.boss,
-                    hp: nextBossHp,
-                    phase: getBossPhaseAfterDamage(nextBossHp, raid.battle.boss.maxHp)
-                },
-                players: {
-                    ...raid.battle.players,
-                    [input.telegramUserId]: updatedBattlePlayer
-                }
-            }
-        };
+        const battleWithPlayer = updateBattlePlayer(
+            damageResult.battle,
+            updatedBattlePlayer
+        );
+
+        const updatedRaid = buildRaidAfterBattleChange(raid, battleWithPlayer);
 
         await this.raidRepository.saveRaid(updatedRaid);
 
         return {
             ok: true,
             raid: updatedRaid,
-            damageDealt
+            damageDealt: damageResult.damageDealt
         };
     }
 
@@ -492,7 +626,12 @@ export class RaidService {
                 maxHp: bossMaxHp,
                 phase: "idle"
             },
-            players: createBattlePlayers(players)
+            players: createBattlePlayers(players),
+            notesByPlayer: createBattleNotesByPlayer({
+                players,
+                startedAt: input.startedAt,
+                endsAt: input.startedAt + BATTLE_DURATION_SECONDS * 1000
+            })
         };
     }
 
@@ -516,21 +655,587 @@ function createBattlePlayers(
             {
                 telegramUserId: player.telegramUserId,
                 displayName: player.displayName,
-                hp: 100,
-                maxHp: 100,
+
+                hp: PLAYER_MAX_HP,
+                maxHp: PLAYER_MAX_HP,
+
                 combo: 0,
                 maxCombo: 0,
+
                 damage: 0,
                 perfectCount: 0,
                 goodCount: 0,
                 missCount: 0,
                 wrongCount: 0,
+
                 deaths: 0,
                 isStunned: false,
-                stunnedUntil: null
+                stunnedUntil: null,
+
+                lastInputKey: null,
+                lastInputAt: null,
+                lastRating: null,
+                lastDamageDealt: 0,
+                lastDamageTaken: 0
             } satisfies BattlePlayerState
         ])
     );
+}
+
+function createBattleNotesByPlayer(input: {
+    players: RaidPlayer[];
+    startedAt: number;
+    endsAt: number;
+}): Record<string, BattleNote[]> {
+    return Object.fromEntries(
+        input.players.map((player, playerIndex) => [
+            player.telegramUserId,
+            createBattleNotesForPlayer({
+                telegramUserId: player.telegramUserId,
+                playerIndex,
+                startedAt: input.startedAt,
+                endsAt: input.endsAt
+            })
+        ])
+    );
+}
+
+function createBattleNotesForPlayer(input: {
+    telegramUserId: string;
+    playerIndex: number;
+    startedAt: number;
+    endsAt: number;
+}): BattleNote[] {
+    const notes: BattleNote[] = [];
+    const firstHitAt = input.startedAt + BATTLE_NOTE_FIRST_HIT_DELAY_MS;
+    const lastHitAt = input.endsAt - BATTLE_NOTE_MISS_WINDOW_MS;
+
+    for (
+        let hitAt = firstHitAt, noteIndex = 0;
+        hitAt <= lastHitAt;
+        hitAt += BATTLE_NOTE_INTERVAL_MS, noteIndex += 1
+    ) {
+        const key = BATTLE_INPUT_KEYS[
+        (noteIndex + input.playerIndex) % BATTLE_INPUT_KEYS.length
+            ];
+
+        notes.push({
+            id: nanoid(10),
+            telegramUserId: input.telegramUserId,
+            key,
+            hitAt,
+            status: "pending",
+            rating: null,
+            resolvedAt: null,
+            inputAt: null
+        });
+    }
+
+    return notes;
+}
+
+function applyBattleInputToBattle(input: {
+    battle: BattleState;
+    telegramUserId: string;
+    key: BattleInputKey;
+    inputAt: number;
+}): {
+    battle: BattleState;
+    noteId: string | null;
+    rating: BattleInputRating;
+    damageDealt: number;
+    damageTaken: number;
+    combo: number;
+} {
+    const notes = input.battle.notesByPlayer[input.telegramUserId] ?? [];
+    const candidate = findClosestPendingNote({
+        notes,
+        inputAt: input.inputAt
+    });
+
+    if (!candidate) {
+        const player = input.battle.players[input.telegramUserId];
+        const updatedPlayer = applyFailedInputToPlayer({
+            player,
+            key: input.key,
+            inputAt: input.inputAt,
+            rating: "wrong",
+            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE
+        });
+
+        return {
+            battle: updateBattlePlayer(input.battle, updatedPlayer),
+            noteId: null,
+            rating: "wrong",
+            damageDealt: BATTLE_WRONG_DAMAGE,
+            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE,
+            combo: updatedPlayer.combo
+        };
+    }
+
+    if (candidate.note.key !== input.key) {
+        const player = input.battle.players[input.telegramUserId];
+        const updatedPlayer = applyFailedInputToPlayer({
+            player,
+            key: input.key,
+            inputAt: input.inputAt,
+            rating: "wrong",
+            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE
+        });
+
+        return {
+            battle: updateBattlePlayer(input.battle, updatedPlayer),
+            noteId: candidate.note.id,
+            rating: "wrong",
+            damageDealt: BATTLE_WRONG_DAMAGE,
+            damageTaken: BATTLE_WRONG_PLAYER_DAMAGE,
+            combo: updatedPlayer.combo
+        };
+    }
+
+    const rating = getRatingFromTiming(candidate.distanceMs);
+
+    if (rating === "miss") {
+        const player = input.battle.players[input.telegramUserId];
+        const updatedPlayer = applyFailedInputToPlayer({
+            player,
+            key: input.key,
+            inputAt: input.inputAt,
+            rating: "miss",
+            damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+        });
+
+        const battleWithMissedNote = updateBattleNote({
+            battle: input.battle,
+            telegramUserId: input.telegramUserId,
+            noteIndex: candidate.noteIndex,
+            note: {
+                ...candidate.note,
+                status: "missed",
+                rating: "miss",
+                resolvedAt: input.inputAt,
+                inputAt: input.inputAt
+            }
+        });
+
+        return {
+            battle: updateBattlePlayer(battleWithMissedNote, updatedPlayer),
+            noteId: candidate.note.id,
+            rating: "miss",
+            damageDealt: BATTLE_MISS_DAMAGE,
+            damageTaken: BATTLE_MISS_PLAYER_DAMAGE,
+            combo: updatedPlayer.combo
+        };
+    }
+
+    const player = input.battle.players[input.telegramUserId];
+    const nextCombo = player.combo + 1;
+    const damage = getDamageForRating(rating, nextCombo);
+
+    const bossDamageResult = applyBossDamageToBattle({
+        battle: input.battle,
+        damage
+    });
+
+    const updatedPlayer = applySuccessfulInputToPlayer({
+        player,
+        key: input.key,
+        inputAt: input.inputAt,
+        rating,
+        damageDealt: bossDamageResult.damageDealt
+    });
+
+    const battleWithHitNote = updateBattleNote({
+        battle: bossDamageResult.battle,
+        telegramUserId: input.telegramUserId,
+        noteIndex: candidate.noteIndex,
+        note: {
+            ...candidate.note,
+            status: "hit",
+            rating,
+            resolvedAt: input.inputAt,
+            inputAt: input.inputAt
+        }
+    });
+
+    return {
+        battle: updateBattlePlayer(battleWithHitNote, updatedPlayer),
+        noteId: candidate.note.id,
+        rating,
+        damageDealt: bossDamageResult.damageDealt,
+        damageTaken: 0,
+        combo: updatedPlayer.combo
+    };
+}
+
+function resolveMissedNotesInBattle(
+    battle: BattleState,
+    now: number
+): { battle: BattleState; resolvedCount: number } {
+    let resolvedCount = 0;
+    let nextBattle = battle;
+
+    for (const [telegramUserId, notes] of Object.entries(battle.notesByPlayer)) {
+        const player = nextBattle.players[telegramUserId];
+
+        if (!player) {
+            continue;
+        }
+
+        let nextPlayer = player;
+        let didChangeNotes = false;
+
+        const nextNotes: BattleNote[] = notes.map((note): BattleNote => {
+            if (note.status !== "pending") {
+                return note;
+            }
+
+            if (now <= note.hitAt + BATTLE_NOTE_MISS_WINDOW_MS) {
+                return note;
+            }
+
+            resolvedCount += 1;
+            didChangeNotes = true;
+
+            nextPlayer = applyFailedInputToPlayer({
+                player: nextPlayer,
+                key: null,
+                inputAt: null,
+                rating: "miss",
+                damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+            });
+
+            return {
+                ...note,
+                status: "missed",
+                rating: "miss",
+                resolvedAt: now,
+                inputAt: null
+            };
+        });
+
+        if (didChangeNotes) {
+            nextBattle = {
+                ...nextBattle,
+                players: {
+                    ...nextBattle.players,
+                    [telegramUserId]: nextPlayer
+                },
+                notesByPlayer: {
+                    ...nextBattle.notesByPlayer,
+                    [telegramUserId]: nextNotes
+                }
+            };
+        }
+    }
+
+    return {
+        battle: nextBattle,
+        resolvedCount
+    };
+}
+
+function resolveAllPendingNotesAsMissed(
+    battle: BattleState,
+    now: number
+): BattleState {
+    let nextBattle = battle;
+
+    for (const [telegramUserId, notes] of Object.entries(battle.notesByPlayer)) {
+        const player = nextBattle.players[telegramUserId];
+
+        if (!player) {
+            continue;
+        }
+
+        let nextPlayer = player;
+        let didChangeNotes = false;
+
+        const nextNotes: BattleNote[] = notes.map((note): BattleNote => {
+            if (note.status !== "pending") {
+                return note;
+            }
+
+            didChangeNotes = true;
+
+            nextPlayer = applyFailedInputToPlayer({
+                player: nextPlayer,
+                key: null,
+                inputAt: null,
+                rating: "miss",
+                damageTaken: BATTLE_MISS_PLAYER_DAMAGE
+            });
+
+            return {
+                ...note,
+                status: "missed",
+                rating: "miss",
+                resolvedAt: now,
+                inputAt: null
+            };
+        });
+
+        if (didChangeNotes) {
+            nextBattle = {
+                ...nextBattle,
+                players: {
+                    ...nextBattle.players,
+                    [telegramUserId]: nextPlayer
+                },
+                notesByPlayer: {
+                    ...nextBattle.notesByPlayer,
+                    [telegramUserId]: nextNotes
+                }
+            };
+        }
+    }
+
+    return nextBattle;
+}
+
+function findClosestPendingNote(input: {
+    notes: BattleNote[];
+    inputAt: number;
+}): BattleInputCandidate | null {
+    let bestCandidate: BattleInputCandidate | null = null;
+
+    input.notes.forEach((note, noteIndex) => {
+        if (note.status !== "pending") {
+            return;
+        }
+
+        const distanceMs = Math.abs(note.hitAt - input.inputAt);
+
+        if (distanceMs > BATTLE_NOTE_MISS_WINDOW_MS) {
+            return;
+        }
+
+        if (!bestCandidate || distanceMs < bestCandidate.distanceMs) {
+            bestCandidate = {
+                note,
+                noteIndex,
+                distanceMs
+            };
+        }
+    });
+
+    return bestCandidate;
+}
+
+function getRatingFromTiming(
+    distanceMs: number
+): Exclude<BattleInputRating, "wrong"> {
+    if (distanceMs <= BATTLE_NOTE_PERFECT_WINDOW_MS) {
+        return "perfect";
+    }
+
+    if (distanceMs <= BATTLE_NOTE_GOOD_WINDOW_MS) {
+        return "good";
+    }
+
+    return "miss";
+}
+
+function getDamageForRating(
+    rating: Exclude<BattleInputRating, "miss" | "wrong">,
+    combo: number
+): number {
+    const baseDamage =
+        rating === "perfect" ? BATTLE_PERFECT_DAMAGE : BATTLE_GOOD_DAMAGE;
+
+    return baseDamage + getComboBonusDamage(combo);
+}
+
+function getComboBonusDamage(combo: number): number {
+    return Math.min(30, Math.floor(combo / 5) * 5);
+}
+
+function applySuccessfulInputToPlayer(input: {
+    player: BattlePlayerState;
+    key: BattleInputKey;
+    inputAt: number;
+    rating: Exclude<BattleInputRating, "miss" | "wrong">;
+    damageDealt: number;
+}): BattlePlayerState {
+    const nextCombo = input.player.combo + 1;
+
+    return {
+        ...input.player,
+        combo: nextCombo,
+        maxCombo: Math.max(input.player.maxCombo, nextCombo),
+        damage: input.player.damage + input.damageDealt,
+        perfectCount:
+            input.rating === "perfect"
+                ? input.player.perfectCount + 1
+                : input.player.perfectCount,
+        goodCount:
+            input.rating === "good"
+                ? input.player.goodCount + 1
+                : input.player.goodCount,
+        isStunned: false,
+        stunnedUntil: null,
+        lastInputKey: input.key,
+        lastInputAt: input.inputAt,
+        lastRating: input.rating,
+        lastDamageDealt: input.damageDealt,
+        lastDamageTaken: 0
+    };
+}
+
+function applyFailedInputToPlayer(input: {
+    player: BattlePlayerState;
+    key: BattleInputKey | null;
+    inputAt: number | null;
+    rating: Extract<BattleInputRating, "miss" | "wrong">;
+    damageTaken: number;
+}): BattlePlayerState {
+    const damagedPlayer = applyPlayerDamage({
+        player: input.player,
+        damageTaken: input.damageTaken,
+        now: input.inputAt ?? Date.now()
+    });
+
+    return {
+        ...damagedPlayer,
+        combo: 0,
+        missCount:
+            input.rating === "miss"
+                ? damagedPlayer.missCount + 1
+                : damagedPlayer.missCount,
+        wrongCount:
+            input.rating === "wrong"
+                ? damagedPlayer.wrongCount + 1
+                : damagedPlayer.wrongCount,
+        lastInputKey: input.key,
+        lastInputAt: input.inputAt,
+        lastRating: input.rating,
+        lastDamageDealt: 0,
+        lastDamageTaken: input.damageTaken
+    };
+}
+
+function applyPlayerDamage(input: {
+    player: BattlePlayerState;
+    damageTaken: number;
+    now: number;
+}): BattlePlayerState {
+    if (input.damageTaken <= 0) {
+        return input.player;
+    }
+
+    const nextHp = input.player.hp - input.damageTaken;
+
+    if (nextHp > 0) {
+        return {
+            ...input.player,
+            hp: nextHp
+        };
+    }
+
+    return {
+        ...input.player,
+        hp: input.player.maxHp,
+        combo: 0,
+        deaths: input.player.deaths + 1,
+        isStunned: true,
+        stunnedUntil: input.now + BATTLE_STUN_DURATION_MS
+    };
+}
+
+function normalizePlayerStun(
+    player: BattlePlayerState,
+    now: number
+): BattlePlayerState {
+    if (!player.isStunned) {
+        return player;
+    }
+
+    if (!player.stunnedUntil || now < player.stunnedUntil) {
+        return player;
+    }
+
+    return {
+        ...player,
+        isStunned: false,
+        stunnedUntil: null
+    };
+}
+
+function isPlayerStunned(player: BattlePlayerState, now: number): boolean {
+    return Boolean(player.isStunned && player.stunnedUntil && now < player.stunnedUntil);
+}
+
+function applyBossDamageToBattle(input: {
+    battle: BattleState;
+    damage: number;
+}): { battle: BattleState; damageDealt: number } {
+    const damageDealt = Math.min(input.damage, input.battle.boss.hp);
+    const nextBossHp = Math.max(0, input.battle.boss.hp - damageDealt);
+
+    return {
+        damageDealt,
+        battle: {
+            ...input.battle,
+            boss: {
+                ...input.battle.boss,
+                hp: nextBossHp,
+                phase: getBossPhaseAfterDamage(nextBossHp, input.battle.boss.maxHp)
+            }
+        }
+    };
+}
+
+function updateBattlePlayer(
+    battle: BattleState,
+    player: BattlePlayerState
+): BattleState {
+    return {
+        ...battle,
+        players: {
+            ...battle.players,
+            [player.telegramUserId]: player
+        }
+    };
+}
+
+function updateBattleNote(input: {
+    battle: BattleState;
+    telegramUserId: string;
+    noteIndex: number;
+    note: BattleNote;
+}): BattleState {
+    const notes = input.battle.notesByPlayer[input.telegramUserId] ?? [];
+    const nextNotes = [...notes];
+
+    nextNotes[input.noteIndex] = input.note;
+
+    return {
+        ...input.battle,
+        notesByPlayer: {
+            ...input.battle.notesByPlayer,
+            [input.telegramUserId]: nextNotes
+        }
+    };
+}
+
+function buildRaidAfterBattleChange(raid: Raid, battle: BattleState): Raid {
+    const isBossDefeated = battle.boss.hp <= 0;
+
+    return {
+        ...raid,
+        status: isBossDefeated ? "finished" : "battle",
+        battle: {
+            ...battle,
+            status: isBossDefeated ? "finished" : "active",
+            outcome: isBossDefeated ? "win" : null,
+            boss: {
+                ...battle.boss,
+                phase: isBossDefeated
+                    ? "defeated"
+                    : getBossPhaseAfterDamage(battle.boss.hp, battle.boss.maxHp)
+            }
+        }
+    };
 }
 
 function calculateBossHp(playerCount: number): number {
@@ -558,9 +1263,13 @@ function getBossPhaseAfterDamage(currentHp: number, maxHp: number): BossPhase {
         return "rage";
     }
 
-    return "hurt";
+    if (currentHp < maxHp) {
+        return "hurt";
+    }
+
+    return "idle";
 }
 
 function isBattleInputKey(key: string): key is BattleInputKey {
-    return key === "left" || key === "up" || key === "down" || key === "right";
+    return BATTLE_INPUT_KEYS.includes(key as BattleInputKey);
 }

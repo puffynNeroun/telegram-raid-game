@@ -22,13 +22,18 @@ type SetupSocketServerOptions = {
 
 type RaidSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 type RaidSocketServer = Server<ClientToServerEvents, ServerToClientEvents>;
+
 type BattleFinalizationTimers = Map<string, ReturnType<typeof setTimeout>>;
+type MissedNotesResolutionTimers = Map<string, ReturnType<typeof setInterval>>;
+
+const MISSED_NOTES_RESOLUTION_INTERVAL_MS = 250;
 
 export function setupSocketServer({
                                       httpServer,
                                       raidService
                                   }: SetupSocketServerOptions): RaidSocketServer {
     const battleFinalizationTimers: BattleFinalizationTimers = new Map();
+    const missedNotesResolutionTimers: MissedNotesResolutionTimers = new Map();
 
     const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
         cors: {
@@ -73,7 +78,8 @@ export function setupSocketServer({
                     io,
                     raidService,
                     raid,
-                    timers: battleFinalizationTimers
+                    finalizationTimers: battleFinalizationTimers,
+                    missedNotesTimers: missedNotesResolutionTimers
                 });
 
                 if (!result.finalized) {
@@ -170,7 +176,16 @@ export function setupSocketServer({
                     io,
                     raidService,
                     raid: result.raid,
-                    timers: battleFinalizationTimers
+                    finalizationTimers: battleFinalizationTimers,
+                    missedNotesTimers: missedNotesResolutionTimers
+                });
+
+                scheduleMissedNotesResolution({
+                    io,
+                    raidService,
+                    raid: result.raid,
+                    finalizationTimers: battleFinalizationTimers,
+                    missedNotesTimers: missedNotesResolutionTimers
                 });
             } catch (error) {
                 emitInternalSocketError(socket, error);
@@ -196,7 +211,8 @@ export function setupSocketServer({
                         io,
                         raidService,
                         raidId: parsedPayload.raidId,
-                        timers: battleFinalizationTimers,
+                        finalizationTimers: battleFinalizationTimers,
+                        missedNotesTimers: missedNotesResolutionTimers,
                         reason: result.reason
                     });
 
@@ -212,7 +228,11 @@ export function setupSocketServer({
                 }
 
                 if (result.raid.status === "finished") {
-                    clearBattleFinalizationTimer(battleFinalizationTimers, result.raid.id);
+                    clearRaidBattleTimers({
+                        raidId: result.raid.id,
+                        finalizationTimers: battleFinalizationTimers,
+                        missedNotesTimers: missedNotesResolutionTimers
+                    });
                 }
 
                 emitRaidStateToRoom(io, result.raid);
@@ -240,7 +260,8 @@ export function setupSocketServer({
                         io,
                         raidService,
                         raidId: parsedPayload.raidId,
-                        timers: battleFinalizationTimers,
+                        finalizationTimers: battleFinalizationTimers,
+                        missedNotesTimers: missedNotesResolutionTimers,
                         reason: result.reason
                     });
 
@@ -256,7 +277,11 @@ export function setupSocketServer({
                 }
 
                 if (result.raid.status === "finished") {
-                    clearBattleFinalizationTimer(battleFinalizationTimers, result.raid.id);
+                    clearRaidBattleTimers({
+                        raidId: result.raid.id,
+                        finalizationTimers: battleFinalizationTimers,
+                        missedNotesTimers: missedNotesResolutionTimers
+                    });
                 }
 
                 emitRaidStateToRoom(io, result.raid);
@@ -313,13 +338,15 @@ async function finalizeBattleIfExpired({
                                            io,
                                            raidService,
                                            raidId,
-                                           timers,
+                                           finalizationTimers,
+                                           missedNotesTimers,
                                            reason
                                        }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raidId: string;
-    timers: BattleFinalizationTimers;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
     reason: string;
 }): Promise<boolean> {
     if (reason !== "battle_expired") {
@@ -332,7 +359,12 @@ async function finalizeBattleIfExpired({
         return false;
     }
 
-    clearBattleFinalizationTimer(timers, raidId);
+    clearRaidBattleTimers({
+        raidId,
+        finalizationTimers,
+        missedNotesTimers
+    });
+
     emitRaidStateToRoom(io, finalizeResult.raid);
 
     return true;
@@ -342,14 +374,22 @@ async function finalizeExpiredBattleIfNeeded({
                                                  io,
                                                  raidService,
                                                  raid,
-                                                 timers
+                                                 finalizationTimers,
+                                                 missedNotesTimers
                                              }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raid: Raid;
-    timers: BattleFinalizationTimers;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
 }): Promise<{ raid: Raid; finalized: boolean }> {
     if (!isActiveBattleRaid(raid)) {
+        clearRaidBattleTimers({
+            raidId: raid.id,
+            finalizationTimers,
+            missedNotesTimers
+        });
+
         return {
             raid,
             finalized: false
@@ -361,7 +401,16 @@ async function finalizeExpiredBattleIfNeeded({
             io,
             raidService,
             raid,
-            timers
+            finalizationTimers,
+            missedNotesTimers
+        });
+
+        scheduleMissedNotesResolution({
+            io,
+            raidService,
+            raid,
+            finalizationTimers,
+            missedNotesTimers
         });
 
         return {
@@ -379,7 +428,12 @@ async function finalizeExpiredBattleIfNeeded({
         };
     }
 
-    clearBattleFinalizationTimer(timers, raid.id);
+    clearRaidBattleTimers({
+        raidId: raid.id,
+        finalizationTimers,
+        missedNotesTimers
+    });
+
     emitRaidStateToRoom(io, result.raid);
 
     return {
@@ -392,19 +446,21 @@ function scheduleBattleFinalization({
                                         io,
                                         raidService,
                                         raid,
-                                        timers
+                                        finalizationTimers,
+                                        missedNotesTimers
                                     }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raid: Raid;
-    timers: BattleFinalizationTimers;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
 }): void {
     if (!isActiveBattleRaid(raid)) {
-        clearBattleFinalizationTimer(timers, raid.id);
+        clearBattleFinalizationTimer(finalizationTimers, raid.id);
         return;
     }
 
-    clearBattleFinalizationTimer(timers, raid.id);
+    clearBattleFinalizationTimer(finalizationTimers, raid.id);
 
     const delayMs = Math.max(0, raid.battle.endsAt - Date.now());
 
@@ -413,11 +469,12 @@ function scheduleBattleFinalization({
             io,
             raidService,
             raidId: raid.id,
-            timers
+            finalizationTimers,
+            missedNotesTimers
         });
     }, delayMs + 50);
 
-    timers.set(raid.id, timerId);
+    finalizationTimers.set(raid.id, timerId);
 
     console.log("[socket] scheduled battle finalization:", {
         raidId: raid.id,
@@ -425,21 +482,65 @@ function scheduleBattleFinalization({
     });
 }
 
+function scheduleMissedNotesResolution({
+                                           io,
+                                           raidService,
+                                           raid,
+                                           finalizationTimers,
+                                           missedNotesTimers
+                                       }: {
+    io: RaidSocketServer;
+    raidService: RaidService;
+    raid: Raid;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
+}): void {
+    if (!isActiveBattleRaid(raid)) {
+        clearMissedNotesResolutionTimer(missedNotesTimers, raid.id);
+        return;
+    }
+
+    clearMissedNotesResolutionTimer(missedNotesTimers, raid.id);
+
+    const timerId = setInterval(() => {
+        void resolveMissedNotesByTimer({
+            io,
+            raidService,
+            raidId: raid.id,
+            finalizationTimers,
+            missedNotesTimers
+        });
+    }, MISSED_NOTES_RESOLUTION_INTERVAL_MS);
+
+    missedNotesTimers.set(raid.id, timerId);
+
+    console.log("[socket] scheduled missed notes resolution:", {
+        raidId: raid.id,
+        intervalMs: MISSED_NOTES_RESOLUTION_INTERVAL_MS
+    });
+}
+
 async function finalizeBattleByTimer({
                                          io,
                                          raidService,
                                          raidId,
-                                         timers
+                                         finalizationTimers,
+                                         missedNotesTimers
                                      }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raidId: string;
-    timers: BattleFinalizationTimers;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
 }): Promise<void> {
     const result = await raidService.finalizeExpiredBattle(raidId);
 
     if (result.ok) {
-        clearBattleFinalizationTimer(timers, raidId);
+        clearRaidBattleTimers({
+            raidId,
+            finalizationTimers,
+            missedNotesTimers
+        });
 
         if (result.finalized) {
             console.log("[socket] battle finalized by timer:", {
@@ -460,19 +561,93 @@ async function finalizeBattleByTimer({
                 io,
                 raidService,
                 raid,
-                timers
+                finalizationTimers,
+                missedNotesTimers
+            });
+
+            scheduleMissedNotesResolution({
+                io,
+                raidService,
+                raid,
+                finalizationTimers,
+                missedNotesTimers
             });
         }
 
         return;
     }
 
-    clearBattleFinalizationTimer(timers, raidId);
+    clearRaidBattleTimers({
+        raidId,
+        finalizationTimers,
+        missedNotesTimers
+    });
 
     console.log("[socket] battle finalization skipped:", {
         raidId,
         reason: result.reason
     });
+}
+
+async function resolveMissedNotesByTimer({
+                                             io,
+                                             raidService,
+                                             raidId,
+                                             finalizationTimers,
+                                             missedNotesTimers
+                                         }: {
+    io: RaidSocketServer;
+    raidService: RaidService;
+    raidId: string;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
+}): Promise<void> {
+    const result = await raidService.resolveMissedNotes({
+        raidId
+    });
+
+    if (!result.ok) {
+        clearRaidBattleTimers({
+            raidId,
+            finalizationTimers,
+            missedNotesTimers
+        });
+
+        console.log("[socket] missed notes resolution stopped:", {
+            raidId,
+            reason: result.reason
+        });
+
+        return;
+    }
+
+    if (result.raid.status === "finished") {
+        clearRaidBattleTimers({
+            raidId,
+            finalizationTimers,
+            missedNotesTimers
+        });
+
+        emitRaidStateToRoom(io, result.raid);
+        return;
+    }
+
+    if (result.resolvedCount > 0) {
+        emitRaidStateToRoom(io, result.raid);
+    }
+}
+
+function clearRaidBattleTimers({
+                                   raidId,
+                                   finalizationTimers,
+                                   missedNotesTimers
+                               }: {
+    raidId: string;
+    finalizationTimers: BattleFinalizationTimers;
+    missedNotesTimers: MissedNotesResolutionTimers;
+}): void {
+    clearBattleFinalizationTimer(finalizationTimers, raidId);
+    clearMissedNotesResolutionTimer(missedNotesTimers, raidId);
 }
 
 function clearBattleFinalizationTimer(
@@ -486,6 +661,20 @@ function clearBattleFinalizationTimer(
     }
 
     clearTimeout(existingTimer);
+    timers.delete(raidId);
+}
+
+function clearMissedNotesResolutionTimer(
+    timers: MissedNotesResolutionTimers,
+    raidId: string
+): void {
+    const existingTimer = timers.get(raidId);
+
+    if (!existingTimer) {
+        return;
+    }
+
+    clearInterval(existingTimer);
     timers.delete(raidId);
 }
 
