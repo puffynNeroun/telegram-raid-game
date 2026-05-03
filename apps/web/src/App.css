@@ -407,6 +407,47 @@ button {
   text-transform: capitalize;
 }
 
+.battle-actions {
+  margin-top: 14px;
+}
+
+.attack-button {
+  width: 100%;
+  min-height: 54px;
+  border: 0;
+  border-radius: 18px;
+  color: #111827;
+  background:
+          radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.38), transparent 36%),
+          linear-gradient(135deg, #facc15, #fb7185 55%, #a855f7);
+  box-shadow: 0 16px 34px rgba(251, 113, 133, 0.24);
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 1000;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transition:
+          transform 120ms ease,
+          opacity 120ms ease,
+          box-shadow 120ms ease;
+}
+
+.attack-button:hover:not(:disabled) {
+  box-shadow: 0 20px 42px rgba(251, 113, 133, 0.32);
+}
+
+.attack-button:active {
+  transform: scale(0.98);
+}
+
+.attack-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+
 @media (max-width: 420px) {
   .app-shell {
     align-items: stretch;

@@ -22,16 +22,19 @@ export function RaidGame() {
         isJoining,
         isReadyUpdating,
         isStarting,
+        isAttacking,
         loadRaid,
         joinRaid,
         setReady,
-        startRaid
+        startRaid,
+        attackBoss
     } = useRaidLobby({
         raidId,
         currentUser
     });
 
     const battle = raid?.battle ?? null;
+    const currentBattlePlayer = battle?.players[currentUser.id] ?? null;
 
     const bossHpPercent = battle
         ? getBossHpPercent(battle.boss.hp, battle.boss.maxHp)
@@ -40,6 +43,8 @@ export function RaidGame() {
     const battleTimeLeft = battle
         ? formatTimeLeft(battle.endsAt, localNow)
         : null;
+
+    const canAttack = Boolean(battle?.status === "active" && currentBattlePlayer);
 
     useEffect(() => {
         initTelegramWebApp();
@@ -212,6 +217,25 @@ export function RaidGame() {
                                         <strong>{battle.outcome ?? "pending"}</strong>
                                     </div>
                                 </div>
+
+                                {battle.status === "active" && (
+                                    <div className="battle-actions">
+                                        {currentBattlePlayer ? (
+                                            <button
+                                                className="attack-button"
+                                                type="button"
+                                                disabled={!canAttack || isAttacking}
+                                                onClick={attackBoss}
+                                            >
+                                                {isAttacking ? "Attacking..." : "Attack Boss"}
+                                            </button>
+                                        ) : (
+                                            <p className="hint-text">
+                                                Join the raid before attacking the boss.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </section>
                         )}
 

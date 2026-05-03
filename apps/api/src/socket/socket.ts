@@ -4,6 +4,7 @@ import type { Socket } from "socket.io";
 import type { RaidService } from "../raids/raid.service.js";
 import type { Raid } from "../raids/raid.types.js";
 import type {
+    BattleAttackPayload,
     ClientToServerEvents,
     JoinPlayerPayload,
     JoinRaidRoomPayload,
@@ -170,6 +171,54 @@ export function setupSocketServer({
                     raid: result.raid,
                     timers: battleFinalizationTimers
                 });
+            } catch (error) {
+                emitInternalSocketError(socket, error);
+            }
+        });
+
+        socket.on("battle:attack", async (payload) => {
+            try {
+                const parsedPayload = parseBattleAttackPayload(payload);
+
+                if (!parsedPayload) {
+                    emitSocketError(socket, {
+                        code: "invalid_payload",
+                        message: "raidId and telegramUserId are required"
+                    });
+                    return;
+                }
+
+                const result = await raidService.applyBattleAttack(parsedPayload);
+
+                if (!result.ok) {
+                    if (result.reason === "battle_expired") {
+                        const finalizeResult = await raidService.finalizeExpiredBattle(
+                            parsedPayload.raidId
+                        );
+
+                        if (finalizeResult.ok) {
+                            clearBattleFinalizationTimer(
+                                battleFinalizationTimers,
+                                parsedPayload.raidId
+                            );
+
+                            emitRaidStateToRoom(io, finalizeResult.raid);
+                            return;
+                        }
+                    }
+
+                    emitSocketError(socket, {
+                        code: result.reason,
+                        message: result.reason
+                    });
+                    return;
+                }
+
+                if (result.raid.status === "finished") {
+                    clearBattleFinalizationTimer(battleFinalizationTimers, result.raid.id);
+                }
+
+                emitRaidStateToRoom(io, result.raid);
             } catch (error) {
                 emitInternalSocketError(socket, error);
             }
@@ -373,7 +422,11 @@ function clearBattleFinalizationTimer(
 function isActiveBattleRaid(
     raid: Raid
 ): raid is Raid & { battle: NonNullable<Raid["battle"]> } {
-    return raid.status === "battle" && Boolean(raid.battle) && raid.battle?.status === "active";
+    return (
+        raid.status === "battle" &&
+        Boolean(raid.battle) &&
+        raid.battle?.status === "active"
+    );
 }
 
 function getValidRaidId(payload: JoinRaidRoomPayload): string | null {
@@ -456,6 +509,34 @@ function parsePlayerReadyPayload(
 }
 
 function parseStartRaidPayload(payload: StartRaidPayload): StartRaidPayload | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    if (typeof payload.raidId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.telegramUserId !== "string") {
+        return null;
+    }
+
+    const raidId = payload.raidId.trim();
+    const telegramUserId = payload.telegramUserId.trim();
+
+    if (!raidId || !telegramUserId) {
+        return null;
+    }
+
+    return {
+        raidId,
+        telegramUserId
+    };
+}
+
+function parseBattleAttackPayload(
+    payload: BattleAttackPayload
+): BattleAttackPayload | null {
     if (!payload || typeof payload !== "object") {
         return null;
     }

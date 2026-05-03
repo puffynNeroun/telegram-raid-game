@@ -4,6 +4,7 @@ export const MAX_PLAYERS_PER_RAID = 6;
 export const BATTLE_DURATION_SECONDS = 60;
 export const BATTLE_RESULT_TTL_SECONDS = 120;
 export const BASE_BOSS_HP = 1000;
+export const BATTLE_ATTACK_DAMAGE = 50;
 
 export type RaidStatus = "lobby" | "cancelled" | "battle" | "finished";
 
@@ -151,4 +152,24 @@ export type FinalizeExpiredBattleResult =
     | {
     ok: false;
     reason: "raid_not_found" | "no_active_battle" | "battle_not_expired";
+};
+
+export type BattleAttackInput = {
+    raidId: string;
+    telegramUserId: string;
+};
+
+export type BattleAttackResult =
+    | {
+    ok: true;
+    raid: Raid;
+    damageDealt: number;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "no_active_battle"
+        | "battle_expired"
+        | "player_not_in_battle";
 };

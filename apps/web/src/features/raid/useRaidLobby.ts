@@ -24,9 +24,12 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const [raidState, setRaidState] = useState<RaidState>({ status: "idle" });
     const [socketStatus, setSocketStatus] = useState<SocketStatus>("idle");
     const [socketError, setSocketError] = useState<string | null>(null);
+
     const [isJoining, setIsJoining] = useState(false);
     const [isReadyUpdating, setIsReadyUpdating] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
+    const [isAttacking, setIsAttacking] = useState(false);
+
     const [localNow, setLocalNow] = useState(Date.now());
 
     const raid = raidState.status === "loaded" ? raidState.raid : null;
@@ -131,6 +134,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsStarting(false);
+            setIsAttacking(false);
             setSocketError(null);
         });
 
@@ -141,6 +145,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsStarting(false);
+            setIsAttacking(false);
         });
 
         return () => {
@@ -279,6 +284,28 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         }
     }
 
+    function attackBoss() {
+        if (!raidId) {
+            return;
+        }
+
+        const socket = socketRef.current;
+
+        if (!socket?.connected) {
+            setSocketStatus("error");
+            setSocketError("Realtime connection is required for battle actions");
+            setIsAttacking(false);
+            return;
+        }
+
+        setIsAttacking(true);
+
+        socket.emit("battle:attack", {
+            raidId,
+            telegramUserId: currentUser.id
+        });
+    }
+
     return {
         raidState,
         raid,
@@ -292,9 +319,11 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         isJoining,
         isReadyUpdating,
         isStarting,
+        isAttacking,
         loadRaid,
         joinRaid,
         setReady,
-        startRaid
+        startRaid,
+        attackBoss
     };
 }

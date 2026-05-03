@@ -21,6 +21,11 @@ export type StartRaidPayload = {
     telegramUserId: string;
 };
 
+export type BattleAttackPayload = {
+    raidId: string;
+    telegramUserId: string;
+};
+
 export type RaidStatePayload = {
     raid: Raid;
     serverTime: number;
@@ -36,6 +41,7 @@ export type ClientToServerEvents = {
     "player:join": (payload: JoinPlayerPayload) => void;
     "player:ready": (payload: PlayerReadyPayload) => void;
     "raid:start": (payload: StartRaidPayload) => void;
+    "battle:attack": (payload: BattleAttackPayload) => void;
 };
 
 export type ServerToClientEvents = {
