@@ -4,6 +4,8 @@ export type BattleStatus = "active" | "finished";
 export type BattleOutcome = "win" | "lose" | null;
 export type BossPhase = "idle" | "hurt" | "rage" | "defeated";
 
+export type BattleInputKey = "left" | "up" | "down" | "right";
+
 export type RaidPlayer = {
     telegramUserId: string;
     displayName: string;
@@ -111,6 +113,12 @@ export type BattleAttackPayload = {
     telegramUserId: string;
 };
 
+export type BattleInputPayload = {
+    raidId: string;
+    telegramUserId: string;
+    key: BattleInputKey;
+};
+
 export type RaidStatePayload = {
     raid: Raid;
     serverTime: number;
@@ -127,6 +135,7 @@ export type ClientToServerEvents = {
     "player:ready": (payload: PlayerReadyPayload) => void;
     "raid:start": (payload: StartRaidPayload) => void;
     "battle:attack": (payload: BattleAttackPayload) => void;
+    "battle:input": (payload: BattleInputPayload) => void;
 };
 
 export type ServerToClientEvents = {

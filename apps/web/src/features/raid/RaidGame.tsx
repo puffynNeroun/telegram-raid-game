@@ -2,6 +2,34 @@ import { useEffect, useMemo } from "react";
 import { formatTimeLeft } from "./time";
 import { getCurrentUser, initTelegramWebApp } from "./telegram";
 import { useRaidLobby } from "./useRaidLobby";
+import type { BattleInputKey } from "./types";
+
+const BATTLE_INPUT_CONTROLS: Array<{
+    key: BattleInputKey;
+    label: string;
+    keyboardLabel: string;
+}> = [
+    {
+        key: "left",
+        label: "←",
+        keyboardLabel: "Left"
+    },
+    {
+        key: "up",
+        label: "↑",
+        keyboardLabel: "Up"
+    },
+    {
+        key: "down",
+        label: "↓",
+        keyboardLabel: "Down"
+    },
+    {
+        key: "right",
+        label: "→",
+        keyboardLabel: "Right"
+    }
+];
 
 export function RaidGame() {
     const params = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -22,12 +50,12 @@ export function RaidGame() {
         isJoining,
         isReadyUpdating,
         isStarting,
-        isAttacking,
+        isInputSending,
         loadRaid,
         joinRaid,
         setReady,
         startRaid,
-        attackBoss
+        sendBattleInput
     } = useRaidLobby({
         raidId,
         currentUser
@@ -44,11 +72,40 @@ export function RaidGame() {
         ? formatTimeLeft(battle.endsAt, localNow)
         : null;
 
-    const canAttack = Boolean(battle?.status === "active" && currentBattlePlayer);
+    const canSendBattleInput = Boolean(
+        battle?.status === "active" && currentBattlePlayer
+    );
 
     useEffect(() => {
         initTelegramWebApp();
     }, []);
+
+    useEffect(() => {
+        if (!canSendBattleInput) {
+            return;
+        }
+
+        function handleKeyDown(event: KeyboardEvent) {
+            if (event.repeat) {
+                return;
+            }
+
+            const inputKey = getBattleInputKeyFromKeyboard(event.key);
+
+            if (!inputKey) {
+                return;
+            }
+
+            event.preventDefault();
+            sendBattleInput(inputKey);
+        }
+
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [canSendBattleInput, sendBattleInput]);
 
     if (!raidId) {
         return (
@@ -221,17 +278,36 @@ export function RaidGame() {
                                 {battle.status === "active" && (
                                     <div className="battle-actions">
                                         {currentBattlePlayer ? (
-                                            <button
-                                                className="attack-button"
-                                                type="button"
-                                                disabled={!canAttack || isAttacking}
-                                                onClick={attackBoss}
-                                            >
-                                                {isAttacking ? "Attacking..." : "Attack Boss"}
-                                            </button>
+                                            <>
+                                                <div className="input-pad" aria-label="Battle input controls">
+                                                    {BATTLE_INPUT_CONTROLS.map((control) => (
+                                                        <button
+                                                            className={`input-button input-button-${control.key}`}
+                                                            key={control.key}
+                                                            type="button"
+                                                            disabled={!canSendBattleInput}
+                                                            onClick={() => sendBattleInput(control.key)}
+                                                            aria-label={`Send ${control.keyboardLabel} input`}
+                                                        >
+                              <span className="input-button-symbol">
+                                {control.label}
+                              </span>
+                                                            <span className="input-button-label">
+                                {control.keyboardLabel}
+                              </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                <p className="hint-text input-hint">
+                                                    {isInputSending
+                                                        ? "Syncing input with server..."
+                                                        : "Tap arrows on mobile or use keyboard arrows on desktop."}
+                                                </p>
+                                            </>
                                         ) : (
                                             <p className="hint-text">
-                                                Join the raid before attacking the boss.
+                                                Join the raid before sending battle input.
                                             </p>
                                         )}
                                     </div>
@@ -356,6 +432,26 @@ export function RaidGame() {
     );
 }
 
+function getBattleInputKeyFromKeyboard(key: string): BattleInputKey | null {
+    if (key === "ArrowLeft" || key.toLowerCase() === "a") {
+        return "left";
+    }
+
+    if (key === "ArrowUp" || key.toLowerCase() === "w") {
+        return "up";
+    }
+
+    if (key === "ArrowDown" || key.toLowerCase() === "s") {
+        return "down";
+    }
+
+    if (key === "ArrowRight" || key.toLowerCase() === "d") {
+        return "right";
+    }
+
+    return null;
+}
+
 function getBossHpPercent(currentHp: number, maxHp: number): number {
     if (maxHp <= 0) {
         return 0;
@@ -425,7 +521,7 @@ function getBattleDescription(
     outcome: "win" | "lose" | null
 ): string {
     if (status === "active") {
-        return "Server-side battle state is live.";
+        return "Use the four battle inputs to damage the boss.";
     }
 
     if (outcome === "win") {

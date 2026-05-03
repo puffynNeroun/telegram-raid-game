@@ -2,6 +2,9 @@ import { nanoid } from "nanoid";
 import type {
     BattleAttackInput,
     BattleAttackResult,
+    BattleInputActionInput,
+    BattleInputActionResult,
+    BattleInputKey,
     BattlePlayerState,
     BattleState,
     BossPhase,
@@ -21,6 +24,7 @@ import {
     BASE_BOSS_HP,
     BATTLE_ATTACK_DAMAGE,
     BATTLE_DURATION_SECONDS,
+    BATTLE_INPUT_DAMAGE,
     BATTLE_RESULT_TTL_SECONDS,
     MAX_PLAYERS_PER_RAID,
     RAID_TTL_SECONDS
@@ -259,72 +263,48 @@ export class RaidService {
     }
 
     async applyBattleAttack(input: BattleAttackInput): Promise<BattleAttackResult> {
-        const raid = await this.raidRepository.getRaid(input.raidId);
+        const result = await this.applyBattleDamage({
+            raidId: input.raidId,
+            telegramUserId: input.telegramUserId,
+            damage: BATTLE_ATTACK_DAMAGE
+        });
 
-        if (!raid) {
-            return {
-                ok: false,
-                reason: "raid_not_found"
-            };
+        if (!result.ok) {
+            return result;
         }
-
-        if (!this.isActiveBattleRaid(raid)) {
-            return {
-                ok: false,
-                reason: "no_active_battle"
-            };
-        }
-
-        if (Date.now() >= raid.battle.endsAt) {
-            return {
-                ok: false,
-                reason: "battle_expired"
-            };
-        }
-
-        const battlePlayer = raid.battle.players[input.telegramUserId];
-
-        if (!battlePlayer) {
-            return {
-                ok: false,
-                reason: "player_not_in_battle"
-            };
-        }
-
-        const damageDealt = Math.min(BATTLE_ATTACK_DAMAGE, raid.battle.boss.hp);
-        const nextBossHp = Math.max(0, raid.battle.boss.hp - damageDealt);
-        const isBossDefeated = nextBossHp <= 0;
-
-        const updatedBattlePlayer: BattlePlayerState = {
-            ...battlePlayer,
-            damage: battlePlayer.damage + damageDealt
-        };
-
-        const updatedRaid: Raid = {
-            ...raid,
-            status: isBossDefeated ? "finished" : "battle",
-            battle: {
-                ...raid.battle,
-                status: isBossDefeated ? "finished" : "active",
-                outcome: isBossDefeated ? "win" : null,
-                boss: {
-                    ...raid.battle.boss,
-                    hp: nextBossHp,
-                    phase: getBossPhaseAfterDamage(nextBossHp, raid.battle.boss.maxHp)
-                },
-                players: {
-                    ...raid.battle.players,
-                    [input.telegramUserId]: updatedBattlePlayer
-                }
-            }
-        };
-
-        await this.raidRepository.saveRaid(updatedRaid);
 
         return {
             ok: true,
-            raid: updatedRaid,
-            damageDealt
+            raid: result.raid,
+            damageDealt: result.damageDealt
+        };
+    }
+
+    async applyBattleInput(
+        input: BattleInputActionInput
+    ): Promise<BattleInputActionResult> {
+        if (!isBattleInputKey(input.key)) {
+            return {
+                ok: false,
+                reason: "invalid_input_key"
+            };
+        }
+
+        const result = await this.applyBattleDamage({
+            raidId: input.raidId,
+            telegramUserId: input.telegramUserId,
+            damage: BATTLE_INPUT_DAMAGE
+        });
+
+        if (!result.ok) {
+            return result;
+        }
+
+        return {
+            ok: true,
+            raid: result.raid,
+            key: input.key,
+            damageDealt: result.damageDealt
         };
     }
 
@@ -386,6 +366,94 @@ export class RaidService {
             ok: true,
             raid: updatedRaid,
             finalized: true
+        };
+    }
+
+    private async applyBattleDamage(input: {
+        raidId: string;
+        telegramUserId: string;
+        damage: number;
+    }): Promise<
+        | {
+        ok: true;
+        raid: Raid;
+        damageDealt: number;
+    }
+        | {
+        ok: false;
+        reason:
+            | "raid_not_found"
+            | "no_active_battle"
+            | "battle_expired"
+            | "player_not_in_battle";
+    }
+    > {
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        if (!this.isActiveBattleRaid(raid)) {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        if (Date.now() >= raid.battle.endsAt) {
+            return {
+                ok: false,
+                reason: "battle_expired"
+            };
+        }
+
+        const battlePlayer = raid.battle.players[input.telegramUserId];
+
+        if (!battlePlayer) {
+            return {
+                ok: false,
+                reason: "player_not_in_battle"
+            };
+        }
+
+        const damageDealt = Math.min(input.damage, raid.battle.boss.hp);
+        const nextBossHp = Math.max(0, raid.battle.boss.hp - damageDealt);
+        const isBossDefeated = nextBossHp <= 0;
+
+        const updatedBattlePlayer: BattlePlayerState = {
+            ...battlePlayer,
+            damage: battlePlayer.damage + damageDealt
+        };
+
+        const updatedRaid: Raid = {
+            ...raid,
+            status: isBossDefeated ? "finished" : "battle",
+            battle: {
+                ...raid.battle,
+                status: isBossDefeated ? "finished" : "active",
+                outcome: isBossDefeated ? "win" : null,
+                boss: {
+                    ...raid.battle.boss,
+                    hp: nextBossHp,
+                    phase: getBossPhaseAfterDamage(nextBossHp, raid.battle.boss.maxHp)
+                },
+                players: {
+                    ...raid.battle.players,
+                    [input.telegramUserId]: updatedBattlePlayer
+                }
+            }
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid,
+            damageDealt
         };
     }
 
@@ -491,4 +559,8 @@ function getBossPhaseAfterDamage(currentHp: number, maxHp: number): BossPhase {
     }
 
     return "hurt";
+}
+
+function isBattleInputKey(key: string): key is BattleInputKey {
+    return key === "left" || key === "up" || key === "down" || key === "right";
 }

@@ -2,9 +2,10 @@ import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
 import type { RaidService } from "../raids/raid.service.js";
-import type { Raid } from "../raids/raid.types.js";
+import type { BattleInputKey, Raid } from "../raids/raid.types.js";
 import type {
     BattleAttackPayload,
+    BattleInputPayload,
     ClientToServerEvents,
     JoinPlayerPayload,
     JoinRaidRoomPayload,
@@ -191,20 +192,60 @@ export function setupSocketServer({
                 const result = await raidService.applyBattleAttack(parsedPayload);
 
                 if (!result.ok) {
-                    if (result.reason === "battle_expired") {
-                        const finalizeResult = await raidService.finalizeExpiredBattle(
-                            parsedPayload.raidId
-                        );
+                    const finalized = await finalizeBattleIfExpired({
+                        io,
+                        raidService,
+                        raidId: parsedPayload.raidId,
+                        timers: battleFinalizationTimers,
+                        reason: result.reason
+                    });
 
-                        if (finalizeResult.ok) {
-                            clearBattleFinalizationTimer(
-                                battleFinalizationTimers,
-                                parsedPayload.raidId
-                            );
+                    if (finalized) {
+                        return;
+                    }
 
-                            emitRaidStateToRoom(io, finalizeResult.raid);
-                            return;
-                        }
+                    emitSocketError(socket, {
+                        code: result.reason,
+                        message: result.reason
+                    });
+                    return;
+                }
+
+                if (result.raid.status === "finished") {
+                    clearBattleFinalizationTimer(battleFinalizationTimers, result.raid.id);
+                }
+
+                emitRaidStateToRoom(io, result.raid);
+            } catch (error) {
+                emitInternalSocketError(socket, error);
+            }
+        });
+
+        socket.on("battle:input", async (payload) => {
+            try {
+                const parsedPayload = parseBattleInputPayload(payload);
+
+                if (!parsedPayload) {
+                    emitSocketError(socket, {
+                        code: "invalid_payload",
+                        message: "raidId, telegramUserId and valid input key are required"
+                    });
+                    return;
+                }
+
+                const result = await raidService.applyBattleInput(parsedPayload);
+
+                if (!result.ok) {
+                    const finalized = await finalizeBattleIfExpired({
+                        io,
+                        raidService,
+                        raidId: parsedPayload.raidId,
+                        timers: battleFinalizationTimers,
+                        reason: result.reason
+                    });
+
+                    if (finalized) {
+                        return;
                     }
 
                     emitSocketError(socket, {
@@ -266,6 +307,35 @@ function emitInternalSocketError(socket: RaidSocket, error: unknown): void {
         code: "internal_error",
         message: "Internal server error"
     });
+}
+
+async function finalizeBattleIfExpired({
+                                           io,
+                                           raidService,
+                                           raidId,
+                                           timers,
+                                           reason
+                                       }: {
+    io: RaidSocketServer;
+    raidService: RaidService;
+    raidId: string;
+    timers: BattleFinalizationTimers;
+    reason: string;
+}): Promise<boolean> {
+    if (reason !== "battle_expired") {
+        return false;
+    }
+
+    const finalizeResult = await raidService.finalizeExpiredBattle(raidId);
+
+    if (!finalizeResult.ok) {
+        return false;
+    }
+
+    clearBattleFinalizationTimer(timers, raidId);
+    emitRaidStateToRoom(io, finalizeResult.raid);
+
+    return true;
 }
 
 async function finalizeExpiredBattleIfNeeded({
@@ -560,4 +630,42 @@ function parseBattleAttackPayload(
         raidId,
         telegramUserId
     };
+}
+
+function parseBattleInputPayload(
+    payload: BattleInputPayload
+): BattleInputPayload | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    if (typeof payload.raidId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.telegramUserId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.key !== "string") {
+        return null;
+    }
+
+    const raidId = payload.raidId.trim();
+    const telegramUserId = payload.telegramUserId.trim();
+    const key = payload.key.trim();
+
+    if (!raidId || !telegramUserId || !isBattleInputKey(key)) {
+        return null;
+    }
+
+    return {
+        raidId,
+        telegramUserId,
+        key
+    };
+}
+
+function isBattleInputKey(key: string): key is BattleInputKey {
+    return key === "left" || key === "up" || key === "down" || key === "right";
 }

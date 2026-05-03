@@ -5,12 +5,15 @@ export const BATTLE_DURATION_SECONDS = 60;
 export const BATTLE_RESULT_TTL_SECONDS = 120;
 export const BASE_BOSS_HP = 1000;
 export const BATTLE_ATTACK_DAMAGE = 50;
+export const BATTLE_INPUT_DAMAGE = 25;
 
 export type RaidStatus = "lobby" | "cancelled" | "battle" | "finished";
 
 export type BattleStatus = "active" | "finished";
 export type BattleOutcome = "win" | "lose" | null;
 export type BossPhase = "idle" | "hurt" | "rage" | "defeated";
+
+export type BattleInputKey = "left" | "up" | "down" | "right";
 
 export type RaidPlayer = {
     telegramUserId: string;
@@ -172,4 +175,27 @@ export type BattleAttackResult =
         | "no_active_battle"
         | "battle_expired"
         | "player_not_in_battle";
+};
+
+export type BattleInputActionInput = {
+    raidId: string;
+    telegramUserId: string;
+    key: BattleInputKey;
+};
+
+export type BattleInputActionResult =
+    | {
+    ok: true;
+    raid: Raid;
+    key: BattleInputKey;
+    damageDealt: number;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "no_active_battle"
+        | "battle_expired"
+        | "player_not_in_battle"
+        | "invalid_input_key";
 };

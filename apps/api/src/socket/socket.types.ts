@@ -1,4 +1,4 @@
-import type { Raid } from "../raids/raid.types.js";
+import type { BattleInputKey, Raid } from "../raids/raid.types.js";
 
 export type JoinRaidRoomPayload = {
     raidId: string;
@@ -26,6 +26,12 @@ export type BattleAttackPayload = {
     telegramUserId: string;
 };
 
+export type BattleInputPayload = {
+    raidId: string;
+    telegramUserId: string;
+    key: BattleInputKey;
+};
+
 export type RaidStatePayload = {
     raid: Raid;
     serverTime: number;
@@ -42,6 +48,7 @@ export type ClientToServerEvents = {
     "player:ready": (payload: PlayerReadyPayload) => void;
     "raid:start": (payload: StartRaidPayload) => void;
     "battle:attack": (payload: BattleAttackPayload) => void;
+    "battle:input": (payload: BattleInputPayload) => void;
 };
 
 export type ServerToClientEvents = {

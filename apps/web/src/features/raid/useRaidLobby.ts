@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
+    BattleInputKey,
     ClientToServerEvents,
     CurrentUser,
     RaidState,
@@ -29,6 +30,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const [isReadyUpdating, setIsReadyUpdating] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
     const [isAttacking, setIsAttacking] = useState(false);
+    const [isInputSending, setIsInputSending] = useState(false);
 
     const [localNow, setLocalNow] = useState(Date.now());
 
@@ -135,6 +137,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsReadyUpdating(false);
             setIsStarting(false);
             setIsAttacking(false);
+            setIsInputSending(false);
             setSocketError(null);
         });
 
@@ -146,6 +149,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsReadyUpdating(false);
             setIsStarting(false);
             setIsAttacking(false);
+            setIsInputSending(false);
         });
 
         return () => {
@@ -306,6 +310,29 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         });
     }
 
+    function sendBattleInput(key: BattleInputKey) {
+        if (!raidId) {
+            return;
+        }
+
+        const socket = socketRef.current;
+
+        if (!socket?.connected) {
+            setSocketStatus("error");
+            setSocketError("Realtime connection is required for battle input");
+            setIsInputSending(false);
+            return;
+        }
+
+        setIsInputSending(true);
+
+        socket.emit("battle:input", {
+            raidId,
+            telegramUserId: currentUser.id,
+            key
+        });
+    }
+
     return {
         raidState,
         raid,
@@ -320,10 +347,12 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         isReadyUpdating,
         isStarting,
         isAttacking,
+        isInputSending,
         loadRaid,
         joinRaid,
         setReady,
         startRaid,
-        attackBoss
+        attackBoss,
+        sendBattleInput
     };
 }
