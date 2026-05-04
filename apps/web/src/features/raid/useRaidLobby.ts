@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
     BattleInputKey,
+    BeatdownHitType,
     BossCatalogItem,
     BossId,
     ClientToServerEvents,
@@ -425,6 +426,33 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         [currentUser.id, raidId]
     );
 
+    const sendBeatdownHit = useCallback(
+        (hitType: BeatdownHitType) => {
+            if (!raidId) {
+                return;
+            }
+
+            const socket = socketRef.current;
+
+            if (!socket?.connected) {
+                setSocketStatus("error");
+                setSocketError("Realtime connection is required for beatdown input");
+                setIsInputSending(false);
+                return;
+            }
+
+            setIsInputSending(true);
+            setGameError(null);
+
+            socket.emit("battle:beatdownHit", {
+                raidId,
+                telegramUserId: currentUser.id,
+                hitType
+            });
+        },
+        [currentUser.id, raidId]
+    );
+
     return {
         raidState,
         raid,
@@ -450,7 +478,8 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         setReady,
         selectBoss,
         startRaid,
-        sendBattleInput
+        sendBattleInput,
+        sendBeatdownHit
     };
 }
 

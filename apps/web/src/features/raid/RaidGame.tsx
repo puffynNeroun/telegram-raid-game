@@ -8,7 +8,7 @@ import { RaidLobbyScreen } from "./screens/RaidLobbyScreen";
 import { RaidLoadingScreen } from "./screens/RaidLoadingScreen";
 import { RaidMissingScreen } from "./screens/RaidMissingScreen";
 import { RaidResultScreen } from "./screens/RaidResultScreen";
-import type { BattleState, BossId, Raid } from "./types";
+import type { BattleState, BossId, Raid, RaidCombatMode } from "./types";
 
 type BattleConclusionState = {
     raid: Raid;
@@ -24,15 +24,18 @@ type RaidActionErrorState = {
 
 type CreateFollowUpRaidInput = {
     bossId: BossId;
+    combatMode: RaidCombatMode;
 };
 
 const BATTLE_CONCLUSION_REVEAL_MS = 3000;
 const DEFAULT_BOSS_ID: BossId = "boss-001";
+const DEFAULT_COMBAT_MODE: RaidCombatMode = "rhythm";
 
 export function RaidGame() {
     const params = useMemo(() => new URLSearchParams(window.location.search), []);
     const raidId = params.get("raidId");
     const chatId = params.get("chatId");
+    const requestedCombatMode = getRequestedCombatMode(params);
 
     const currentUser = useMemo(() => getCurrentUser(params), [params]);
 
@@ -238,6 +241,7 @@ export function RaidGame() {
     const createRaidForChat = async (input: {
         telegramChatId: string;
         bossId: BossId;
+        combatMode: RaidCombatMode;
         errorOwnerRaidId: string;
     }) => {
         if (isCreatingRaid) {
@@ -252,7 +256,8 @@ export function RaidGame() {
                 telegramChatId: input.telegramChatId,
                 hostTelegramUserId: currentUser.id,
                 hostDisplayName: currentUser.displayName,
-                bossId: input.bossId
+                bossId: input.bossId,
+                combatMode: input.combatMode
             });
 
             openRaid({
@@ -277,11 +282,15 @@ export function RaidGame() {
         void createRaidForChat({
             telegramChatId: chatId,
             bossId: DEFAULT_BOSS_ID,
+            combatMode: requestedCombatMode,
             errorOwnerRaidId: raidId
         });
     };
 
-    const createFollowUpRaid = async ({ bossId }: CreateFollowUpRaidInput) => {
+    const createFollowUpRaid = async ({
+                                          bossId,
+                                          combatMode
+                                      }: CreateFollowUpRaidInput) => {
         if (!raid) {
             return;
         }
@@ -289,6 +298,7 @@ export function RaidGame() {
         await createRaidForChat({
             telegramChatId: raid.telegramChatId,
             bossId,
+            combatMode,
             errorOwnerRaidId: raid.id
         });
     };
@@ -299,7 +309,8 @@ export function RaidGame() {
         }
 
         void createFollowUpRaid({
-            bossId: raid.bossId
+            bossId: raid.bossId,
+            combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE
         });
     };
 
@@ -309,7 +320,8 @@ export function RaidGame() {
         }
 
         void createFollowUpRaid({
-            bossId: raid.bossId
+            bossId: raid.bossId,
+            combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE
         });
     };
 
@@ -463,6 +475,16 @@ function getBattleOutcome(
     }
 
     return battle.boss.hp <= 0 ? "win" : "lose";
+}
+
+function getRequestedCombatMode(params: URLSearchParams): RaidCombatMode {
+    const combatMode = params.get("combatMode");
+
+    if (combatMode === "beatdown" || combatMode === "rhythm") {
+        return combatMode;
+    }
+
+    return DEFAULT_COMBAT_MODE;
 }
 
 function openRaid(input: { raidId: string; chatId: string }) {

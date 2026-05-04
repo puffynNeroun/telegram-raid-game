@@ -1,4 +1,10 @@
-import type { BossCatalogItem, BossId, Raid, RaidPlayer } from "./types";
+import type {
+    BossCatalogItem,
+    BossId,
+    Raid,
+    RaidCombatMode,
+    RaidPlayer
+} from "./types";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
@@ -66,6 +72,7 @@ export async function createRaidApi(input: {
     hostTelegramUserId: string;
     hostDisplayName: string;
     bossId?: BossId;
+    combatMode?: RaidCombatMode;
 }) {
     const response = await fetch(`${apiUrl}/raids`, {
         method: "POST",
@@ -76,7 +83,8 @@ export async function createRaidApi(input: {
             telegramChatId: input.telegramChatId,
             hostTelegramUserId: input.hostTelegramUserId,
             hostDisplayName: input.hostDisplayName,
-            bossId: input.bossId
+            bossId: input.bossId,
+            combatMode: input.combatMode
         })
     });
 

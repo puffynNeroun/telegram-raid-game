@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getBossCatalog, isBossId } from "../raids/boss.config.js";
 import type { RaidService } from "../raids/raid.service.js";
-import type { BossId } from "../raids/raid.types.js";
+import type { BossId, RaidCombatMode } from "../raids/raid.types.js";
 
 type CreateRaidRouterOptions = {
     raidService: RaidService;
@@ -27,6 +27,18 @@ type ParsedRequiredBossIdResult =
     error: "bossId is required" | "invalid_boss_id";
 };
 
+type ParsedOptionalCombatModeResult =
+    | {
+    ok: true;
+    combatMode?: RaidCombatMode;
+}
+    | {
+    ok: false;
+    error: "invalid_combat_mode";
+};
+
+const VALID_COMBAT_MODES = new Set<RaidCombatMode>(["rhythm", "beatdown"]);
+
 export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Router {
     const router = Router();
 
@@ -48,6 +60,7 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
         ).trim();
 
         const parsedBossId = parseOptionalBossId(req.body?.bossId);
+        const parsedCombatMode = parseOptionalCombatMode(req.body?.combatMode);
 
         if (!telegramChatId || !hostTelegramUserId || !hostDisplayName) {
             res.status(400).json({
@@ -74,11 +87,20 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
             return;
         }
 
+        if (!parsedCombatMode.ok) {
+            res.status(400).json({
+                ok: false,
+                error: parsedCombatMode.error
+            });
+            return;
+        }
+
         const result = await raidService.createRaid({
             telegramChatId,
             hostTelegramUserId,
             hostDisplayName,
-            bossId: parsedBossId.bossId
+            bossId: parsedBossId.bossId,
+            combatMode: parsedCombatMode.combatMode
         });
 
         if (!result.ok) {
@@ -311,6 +333,32 @@ function parseRequiredBossId(value: unknown): ParsedRequiredBossIdResult {
     };
 }
 
+function parseOptionalCombatMode(value: unknown): ParsedOptionalCombatModeResult {
+    const rawCombatMode = String(value ?? "").trim();
+
+    if (!rawCombatMode) {
+        return {
+            ok: true
+        };
+    }
+
+    if (!isRaidCombatMode(rawCombatMode)) {
+        return {
+            ok: false,
+            error: "invalid_combat_mode"
+        };
+    }
+
+    return {
+        ok: true,
+        combatMode: rawCombatMode
+    };
+}
+
+function isRaidCombatMode(value: string): value is RaidCombatMode {
+    return VALID_COMBAT_MODES.has(value as RaidCombatMode);
+}
+
 function getStatusCodeByReason(reason: string): number {
     const statusCodeByReason: Record<string, number> = {
         raid_not_found: 404,
@@ -319,6 +367,7 @@ function getStatusCodeByReason(reason: string): number {
         raid_full: 409,
         active_raid_exists: 409,
         invalid_boss_id: 400,
+        invalid_combat_mode: 400,
         player_not_in_raid: 403,
         only_host_can_select_boss: 403,
         only_host_can_start: 403,

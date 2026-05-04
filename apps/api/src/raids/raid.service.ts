@@ -3,6 +3,7 @@ import { DEFAULT_BOSS_ID, getBossConfig, isBossId } from "./boss.config.js";
 import type {
     BattleAttackInput,
     BattleAttackResult,
+    BeatdownState,
     BattleInputActionInput,
     BattleInputActionResult,
     BattleInputKey,
@@ -60,6 +61,8 @@ type BattleInputCandidate = {
 };
 
 type RandomGenerator = () => number;
+const DEFAULT_COMBAT_MODE = "rhythm" as const;
+const BEATDOWN_KICK_CHARGE_MAX = 100;
 
 export class RaidService {
     constructor(private readonly raidRepository: RaidRepository) {}
@@ -67,10 +70,12 @@ export class RaidService {
     async createRaid(input: CreateRaidInput): Promise<CreateRaidResult> {
         const now = Date.now();
         const bossConfig = getBossConfig(input.bossId ?? DEFAULT_BOSS_ID);
+        const combatMode = input.combatMode ?? DEFAULT_COMBAT_MODE;
 
         const raid: Raid = {
             id: nanoid(10),
             bossId: bossConfig.id,
+            combatMode,
 
             telegramChatId: input.telegramChatId,
             hostTelegramUserId: input.hostTelegramUserId,
@@ -169,6 +174,7 @@ export class RaidService {
         const updatedRaid: Raid = {
             ...raid,
             bossId: raid.bossId ?? DEFAULT_BOSS_ID,
+            combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE,
             players: {
                 ...raid.players,
                 [input.telegramUserId]: player
@@ -220,6 +226,7 @@ export class RaidService {
         const updatedRaid: Raid = {
             ...raid,
             bossId: raid.bossId ?? DEFAULT_BOSS_ID,
+            combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE,
             players: {
                 ...raid.players,
                 [input.telegramUserId]: updatedPlayer
@@ -284,6 +291,7 @@ export class RaidService {
         const updatedRaid: Raid = {
             ...raid,
             bossId: bossConfig.id,
+            combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE,
             players: resetReadyState(raid.players)
         };
 
@@ -352,6 +360,7 @@ export class RaidService {
         const updatedRaid: Raid = {
             ...raid,
             bossId: bossConfig.id,
+            combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE,
             status: "battle",
             battle,
             expiresAt:
@@ -737,9 +746,12 @@ export class RaidService {
             startedAt: input.startedAt
         });
 
+        const combatMode = input.raid.combatMode ?? DEFAULT_COMBAT_MODE;
+
         return {
             status: "active",
             outcome: null,
+            combatMode,
 
             bossId: input.bossConfig.id,
             noteSeed,
@@ -767,13 +779,23 @@ export class RaidService {
             }),
 
 
-            notesByPlayer: createBattleNotesByPlayer({
-                players,
-                bossConfig: input.bossConfig,
-                startedAt: input.startedAt,
-                endsAt,
-                noteSeed
-            })
+            notesByPlayer:
+                combatMode === "rhythm"
+                    ? createBattleNotesByPlayer({
+                        players,
+                        bossConfig: input.bossConfig,
+                        startedAt: input.startedAt,
+                        endsAt,
+                        noteSeed
+                    })
+                    : {},
+
+            beatdown:
+                combatMode === "beatdown"
+                    ? createBeatdownState({
+                        players
+                    })
+                    : null
         };
     }
 
@@ -838,6 +860,29 @@ function createBattlePlayers(input: {
             } satisfies BattlePlayerState
         ])
     );
+}
+
+function createBeatdownState(input: { players: RaidPlayer[] }): BeatdownState {
+    return {
+        players: Object.fromEntries(
+            input.players.map((player) => [
+                player.telegramUserId,
+                {
+                    telegramUserId: player.telegramUserId,
+                    displayName: player.displayName,
+
+                    kickCharge: 0,
+                    kickChargeMax: BEATDOWN_KICK_CHARGE_MAX,
+
+                    lastHitType: null,
+                    lastHitAt: null,
+                    lastHitDamage: 0,
+
+                    lastKickAt: null
+                }
+            ])
+        )
+    };
 }
 
 function createBattleNotesByPlayer(input: {
@@ -1455,6 +1500,7 @@ function buildRaidAfterBattleChange(input: {
     return {
         ...input.raid,
         bossId: input.battle.bossId,
+        combatMode: input.battle.combatMode,
         status: "battle",
         battle: {
             ...input.battle,
@@ -1480,6 +1526,7 @@ function finishBattleRaid(input: {
     return {
         ...input.raid,
         bossId: input.battle.bossId,
+        combatMode: input.battle.combatMode,
         status: "finished",
         expiresAt: input.finishedAt + BATTLE_RESULT_TTL_SECONDS * 1000,
         battle: {

@@ -4,6 +4,8 @@ export const MAX_PLAYERS_PER_RAID = 6;
 export const BATTLE_RESULT_TTL_SECONDS = 180;
 
 export const BATTLE_INPUT_KEYS = ["left", "up", "down", "right"] as const;
+export const RAID_COMBAT_MODES = ["rhythm", "beatdown"] as const;
+export const BEATDOWN_HIT_TYPES = ["left", "right", "kick"] as const;
 
 /**
  * Legacy fallback constants.
@@ -41,6 +43,8 @@ export type BattleOutcome = "win" | "lose" | null;
 export type BossPhase = "idle" | "hurt" | "rage" | "defeated";
 
 export type BattleInputKey = (typeof BATTLE_INPUT_KEYS)[number];
+export type RaidCombatMode = (typeof RAID_COMBAT_MODES)[number];
+export type BeatdownHitType = (typeof BEATDOWN_HIT_TYPES)[number];
 
 export type BattleNoteStatus = "pending" | "hit" | "missed";
 export type BattleInputRating = "perfect" | "good" | "miss" | "wrong";
@@ -170,9 +174,28 @@ export type BattlePlayerState = {
     lastDamageTaken: number;
 };
 
+export type BeatdownPlayerState = {
+    telegramUserId: string;
+    displayName: string;
+
+    kickCharge: number;
+    kickChargeMax: number;
+
+    lastHitType: BeatdownHitType | null;
+    lastHitAt: number | null;
+    lastHitDamage: number;
+
+    lastKickAt: number | null;
+};
+
+export type BeatdownState = {
+    players: Record<string, BeatdownPlayerState>;
+};
+
 export type BattleState = {
     status: BattleStatus;
     outcome: BattleOutcome;
+    combatMode: RaidCombatMode;
 
     bossId: BossId;
     noteSeed: string;
@@ -186,11 +209,13 @@ export type BattleState = {
     players: Record<string, BattlePlayerState>;
 
     notesByPlayer: Record<string, BattleNote[]>;
+    beatdown: BeatdownState | null;
 };
 
 export type Raid = {
     id: string;
     bossId: BossId;
+    combatMode: RaidCombatMode;
 
     telegramChatId: string;
     hostTelegramUserId: string;
@@ -209,6 +234,7 @@ export type CreateRaidInput = {
     hostTelegramUserId: string;
     hostDisplayName: string;
     bossId?: BossId;
+    combatMode?: RaidCombatMode;
 };
 
 export type CreateRaidResult =

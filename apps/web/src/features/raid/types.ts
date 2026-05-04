@@ -5,6 +5,8 @@ export type BattleOutcome = "win" | "lose" | null;
 export type BossPhase = "idle" | "hurt" | "rage" | "defeated";
 
 export type BattleInputKey = "left" | "up" | "down" | "right";
+export type RaidCombatMode = "rhythm" | "beatdown";
+export type BeatdownHitType = "left" | "right" | "kick";
 
 export type BattleNoteStatus = "pending" | "hit" | "missed";
 export type BattleInputRating = "perfect" | "good" | "miss" | "wrong";
@@ -85,9 +87,28 @@ export type BattlePlayerState = {
     lastDamageTaken: number;
 };
 
+export type BeatdownPlayerState = {
+    telegramUserId: string;
+    displayName: string;
+
+    kickCharge: number;
+    kickChargeMax: number;
+
+    lastHitType: BeatdownHitType | null;
+    lastHitAt: number | null;
+    lastHitDamage: number;
+
+    lastKickAt: number | null;
+};
+
+export type BeatdownState = {
+    players: Record<string, BeatdownPlayerState>;
+};
+
 export type BattleState = {
     status: BattleStatus;
     outcome: BattleOutcome;
+    combatMode: RaidCombatMode;
 
     bossId: BossId;
     noteSeed: string;
@@ -101,11 +122,13 @@ export type BattleState = {
     players: Record<string, BattlePlayerState>;
 
     notesByPlayer: Record<string, BattleNote[]>;
+    beatdown: BeatdownState | null;
 };
 
 export type Raid = {
     id: string;
     bossId: BossId;
+    combatMode: RaidCombatMode;
 
     telegramChatId: string;
     hostTelegramUserId: string;
@@ -183,6 +206,12 @@ export type BattleInputPayload = {
     key: BattleInputKey;
 };
 
+export type BeatdownHitPayload = {
+    raidId: string;
+    telegramUserId: string;
+    hitType: BeatdownHitType;
+};
+
 export type RaidStatePayload = {
     raid: Raid;
     serverTime: number;
@@ -201,6 +230,7 @@ export type ClientToServerEvents = {
     "raid:start": (payload: StartRaidPayload) => void;
     "battle:attack": (payload: BattleAttackPayload) => void;
     "battle:input": (payload: BattleInputPayload) => void;
+    "battle:beatdownHit": (payload: BeatdownHitPayload) => void;
 };
 
 export type ServerToClientEvents = {
