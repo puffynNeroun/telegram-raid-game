@@ -3,6 +3,7 @@ import { createRaidApi } from "./raidApi";
 import { getCurrentUser, initTelegramWebApp } from "./telegram";
 import { useRaidLobby } from "./useRaidLobby";
 import { RaidBattleScreen } from "./screens/RaidBattleScreen";
+import { RaidBeatdownScreen } from "./screens/RaidBeatdownScreen";
 import { RaidErrorScreen } from "./screens/RaidErrorScreen";
 import { RaidLobbyScreen } from "./screens/RaidLobbyScreen";
 import { RaidLoadingScreen } from "./screens/RaidLoadingScreen";
@@ -78,7 +79,8 @@ export function RaidGame() {
         setReady,
         selectBoss,
         startRaid,
-        sendBattleInput
+        sendBattleInput,
+        sendBeatdownHit
     } = useRaidLobby({
         raidId,
         currentUser
@@ -377,6 +379,26 @@ export function RaidGame() {
     }
 
     if (activeBattleConclusion) {
+        if (activeBattleConclusion.battle.combatMode === "beatdown") {
+            return (
+                <RaidBeatdownScreen
+                    raid={activeBattleConclusion.raid}
+                    battle={activeBattleConclusion.battle}
+                    raidId={raidId}
+                    chatId={chatId}
+                    currentUser={currentUser}
+                    players={Object.values(activeBattleConclusion.raid.players)}
+                    localNow={localNow}
+                    socketStatus={socketStatus}
+                    socketError={socketError}
+                    gameError={gameError}
+                    isInputSending={false}
+                    onRefresh={refreshRaid}
+                    onBeatdownHit={sendBeatdownHit}
+                />
+            );
+        }
+
         return (
             <RaidBattleScreen
                 raid={activeBattleConclusion.raid}
@@ -419,6 +441,26 @@ export function RaidGame() {
     }
 
     if (battle && raid.status === "battle") {
+        if (battle.combatMode === "beatdown") {
+            return (
+                <RaidBeatdownScreen
+                    raid={raid}
+                    battle={battle}
+                    raidId={raidId}
+                    chatId={chatId}
+                    currentUser={currentUser}
+                    players={players}
+                    localNow={localNow}
+                    socketStatus={socketStatus}
+                    socketError={socketError}
+                    gameError={gameError}
+                    isInputSending={isInputSending}
+                    onRefresh={refreshRaid}
+                    onBeatdownHit={sendBeatdownHit}
+                />
+            );
+        }
+
         return (
             <RaidBattleScreen
                 raid={raid}
