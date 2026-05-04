@@ -273,7 +273,7 @@ export const BOSS_CONFIGS: Record<BossId, BossConfig> = {
         },
 
         note: {
-            introCountdownMs: 2000,
+            introCountdownMs: 1000,
             firstHitDelayMs: 1300,
             intervalMs: 740,
             visibleAheadMs: 2700,
