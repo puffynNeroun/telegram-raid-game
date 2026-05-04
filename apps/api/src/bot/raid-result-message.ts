@@ -6,8 +6,6 @@ export type RaidResultMessage = {
     buttonText: string;
 };
 
-const MAX_LEADERBOARD_PLAYERS = 6;
-
 export function buildRaidResultMessage(input: {
     raid: Raid;
     webAppUrl: string;
@@ -21,7 +19,7 @@ export function buildRaidResultMessage(input: {
 
     if (!battle) {
         return {
-            text: buildMissingBattleMessage(input.raid),
+            text: "⚠️ Raid finished",
             resultUrl,
             buttonText: "Open Raid"
         };
@@ -29,91 +27,32 @@ export function buildRaidResultMessage(input: {
 
     const outcome = getResolvedOutcome(battle);
     const isVictory = outcome === "win";
-
-    const bossHp = Math.max(0, battle.boss.hp);
-    const bossMaxHp = Math.max(1, battle.boss.maxHp);
     const players = Object.values(battle.players);
-    const leaderboardPlayers = getLeaderboardPlayers(players);
+    const mvp = getMvp(players);
 
     const totalDamage = players.reduce((damage, player) => {
         return damage + player.damage;
     }, 0);
 
-    const totalPerfectHits = players.reduce((hits, player) => {
-        return hits + player.perfectCount;
+    const totalMissWrong = players.reduce((count, player) => {
+        return count + player.missCount + player.wrongCount;
     }, 0);
 
-    const totalGoodHits = players.reduce((hits, player) => {
-        return hits + player.goodCount;
-    }, 0);
+    const resultLine = isVictory
+        ? `🏆 ${battle.boss.name} defeated`
+        : `💀 ${battle.boss.name} survived`;
 
-    const totalMisses = players.reduce((misses, player) => {
-        return misses + player.missCount;
-    }, 0);
+    const mvpLine = mvp
+        ? `👑 ${mvp.displayName}: ${formatNumber(mvp.damage)} dmg · x${mvp.maxCombo}`
+        : "👑 MVP: none";
 
-    const totalWrongHits = players.reduce((wrongHits, player) => {
-        return wrongHits + player.wrongCount;
-    }, 0);
-
-    const bestCombo = players.reduce((combo, player) => {
-        return Math.max(combo, player.maxCombo);
-    }, 0);
-
-    const survivors = players.filter((player) => player.hp > 0).length;
-
-    const headline = isVictory
-        ? `🏆 Raid cleared: ${battle.boss.name}`
-        : `💀 Raid failed: ${battle.boss.name} survived`;
-
-    const bossLine = isVictory
-        ? `Boss HP: 0/${bossMaxHp}`
-        : `Boss HP: ${bossHp}/${bossMaxHp}`;
-
-    const leaderboardLines =
-        leaderboardPlayers.length > 0
-            ? leaderboardPlayers.map(formatLeaderboardPlayer)
-            : ["No player stats recorded."];
-
-    const text = [
-        headline,
-        "",
-        `${formatBossLevel(battle.boss.level)} - ${battle.boss.subtitle}`,
-        bossLine,
-        `Duration: ${formatDuration(battle)}`,
-        `Players: ${players.length}/6`,
-        `Survivors: ${survivors}/${players.length}`,
-        "",
-        "Top damage:",
-        ...leaderboardLines,
-        "",
-        "Squad stats:",
-        `Damage: ${formatNumber(totalDamage)}`,
-        `Best combo: ${bestCombo}`,
-        `Perfect: ${totalPerfectHits}`,
-        `Good: ${totalGoodHits}`,
-        `Miss/Wrong: ${totalMisses + totalWrongHits}`,
-        "",
-        isVictory
-            ? "Open the result screen or start another raid."
-            : "Open the result screen, fix the timing, and run it back."
-    ].join("\n");
+    const teamLine = `⚔️ Team: ${formatNumber(totalDamage)} dmg · Miss ${totalMissWrong}`;
 
     return {
-        text,
+        text: [resultLine, mvpLine, teamLine].join("\n"),
         resultUrl,
         buttonText: isVictory ? "Open Result" : "Retry Raid"
     };
-}
-
-function buildMissingBattleMessage(raid: Raid): string {
-    return [
-        "⚠️ Raid finished, but battle details are unavailable.",
-        "",
-        `Raid ID: ${raid.id}`,
-        `Players: ${Object.keys(raid.players).length}/6`,
-        "",
-        "Open the raid screen for the latest state."
-    ].join("\n");
 }
 
 function buildRaidResultUrl(input: {
@@ -138,50 +77,18 @@ function getResolvedOutcome(
     return battle.boss.hp <= 0 ? "win" : "lose";
 }
 
-function getLeaderboardPlayers(
-    players: BattlePlayerState[]
-): BattlePlayerState[] {
-    return [...players]
-        .sort((firstPlayer, secondPlayer) => {
+function getMvp(players: BattlePlayerState[]): BattlePlayerState | null {
+    return (
+        [...players].sort((firstPlayer, secondPlayer) => {
             const damageDiff = secondPlayer.damage - firstPlayer.damage;
 
             if (damageDiff !== 0) {
                 return damageDiff;
             }
 
-            const comboDiff = secondPlayer.maxCombo - firstPlayer.maxCombo;
-
-            if (comboDiff !== 0) {
-                return comboDiff;
-            }
-
-            return secondPlayer.perfectCount - firstPlayer.perfectCount;
-        })
-        .slice(0, MAX_LEADERBOARD_PLAYERS);
-}
-
-function formatLeaderboardPlayer(
-    player: BattlePlayerState,
-    index: number
-): string {
-    return `${index + 1}. ${player.displayName} - ${formatNumber(
-        player.damage
-    )} dmg, combo ${player.maxCombo}, perfect ${player.perfectCount}`;
-}
-
-function formatBossLevel(level: number): string {
-    const safeLevel = Number.isFinite(level) ? level : 1;
-
-    return `Level ${String(safeLevel).padStart(2, "0")}`;
-}
-
-function formatDuration(battle: BattleState): string {
-    const durationMs = Math.max(0, battle.endsAt - battle.startedAt);
-    const totalSeconds = Math.floor(durationMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+            return secondPlayer.maxCombo - firstPlayer.maxCombo;
+        })[0] ?? null
+    );
 }
 
 function formatNumber(value: number): string {

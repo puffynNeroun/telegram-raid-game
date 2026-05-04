@@ -122,21 +122,11 @@ export async function startTelegramBot({
                     return;
                 }
 
-                await bot.telegram.sendMessage(
-                    raid.telegramChatId,
-                    [
-                        resultMessage.text,
-                        "",
-                        "Local dev link:",
-                        resultMessage.resultUrl,
-                        "",
-                        "Telegram cannot use localhost inside an inline button. Open this link manually in your browser."
-                    ].join("\n")
-                );
+                await bot.telegram.sendMessage(raid.telegramChatId, resultMessage.text);
 
-                console.log("[bot] raid result sent with local link:", {
+                console.log("[bot] raid result local link:", {
                     raidId: raid.id,
-                    chatId: raid.telegramChatId
+                    resultUrl: resultMessage.resultUrl
                 });
             } catch (error) {
                 console.error("[bot] failed to send raid result:", {
