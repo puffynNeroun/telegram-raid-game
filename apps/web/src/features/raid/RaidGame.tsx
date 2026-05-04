@@ -78,6 +78,8 @@ export function RaidGame() {
         joinRaid,
         setReady,
         selectBoss,
+        isCombatModeSelecting,
+        selectCombatMode,
         startRaid,
         sendBattleInput,
         sendBeatdownHit
@@ -497,6 +499,8 @@ export function RaidGame() {
             socketError={socketError}
             gameError={gameError}
             isJoining={isJoining}
+            isCombatModeSelecting={isCombatModeSelecting}
+            onSelectCombatMode={selectCombatMode}
             isReadyUpdating={isReadyUpdating}
             isBossSelecting={isBossSelecting}
             isStarting={isStarting}

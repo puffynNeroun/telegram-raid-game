@@ -7,6 +7,7 @@ import type {
     BossCatalogItem,
     BossId,
     CurrentUser,
+    RaidCombatMode,
     Raid,
     RaidPlayer,
     SocketStatus
@@ -26,6 +27,8 @@ type RaidLobbyScreenProps = {
     localNow: number;
     socketStatus: SocketStatus;
     socketError: string | null;
+    isCombatModeSelecting: boolean;
+    onSelectCombatMode: (combatMode: RaidCombatMode) => void;
     gameError: string | null;
     isJoining: boolean;
     isReadyUpdating: boolean;
@@ -60,6 +63,8 @@ export function RaidLobbyScreen({
                                     isBossSelecting,
                                     isStarting,
                                     onRefresh,
+                                    isCombatModeSelecting,
+                                    onSelectCombatMode,
                                     onJoin,
                                     onReadyChange,
                                     onSelectBoss,
@@ -75,6 +80,12 @@ export function RaidLobbyScreen({
     const isHost = Boolean(currentPlayer?.isHost);
     const canSelectBoss =
         raid.status === "lobby" && isHost && !isBossSelecting && !isStarting;
+    const canSelectCombatMode =
+        raid.status === "lobby" &&
+        isHost &&
+        !isCombatModeSelecting &&
+        !isBossSelecting &&
+        !isStarting;
 
     const actionStateLabel = getActionStateLabel({
         isUserInLobby,
@@ -122,6 +133,62 @@ export function RaidLobbyScreen({
                     <div className="raid-lobby-hero-state">
                         <span>State</span>
                         <strong>{formatStatusLabel(raid.status)}</strong>
+                    </div>
+                </section>
+
+                <section className="raid-lobby-mode-selector" aria-label="Combat mode selection">
+                    <div className="raid-lobby-section-head">
+                        <div>
+                            <p className="eyebrow">Combat mode</p>
+                            <h2>Choose fight style</h2>
+                        </div>
+
+                        <div className="raid-lobby-selector-state">
+                            {isCombatModeSelecting ? "Changing" : formatCombatModeLabel(raid.combatMode)}
+                        </div>
+                    </div>
+
+                    <p className="raid-lobby-selector-hint">
+                        {getCombatModeSelectorHint({
+                            isHost,
+                            isCombatModeSelecting,
+                            isUserInLobby
+                        })}
+                    </p>
+
+                    <div className="raid-lobby-mode-grid">
+                        {COMBAT_MODE_OPTIONS.map((option) => {
+                            const isSelected = option.id === raid.combatMode;
+                            const isDisabled = !canSelectCombatMode || isSelected;
+
+                            return (
+                                <button
+                                    key={option.id}
+                                    className={`raid-lobby-mode-option${
+                                        isSelected ? " is-selected" : ""
+                                    }`}
+                                    type="button"
+                                    disabled={isDisabled}
+                                    aria-pressed={isSelected}
+                                    onClick={() => {
+                                        onSelectCombatMode(option.id);
+                                    }}
+                                >
+                    <span className="raid-lobby-mode-option-icon" aria-hidden="true">
+                        {option.icon}
+                    </span>
+
+                                    <span className="raid-lobby-mode-option-copy">
+                        <strong>{option.title}</strong>
+                        <small>{option.description}</small>
+                    </span>
+
+                                    <span className="raid-lobby-mode-option-meta">
+                        {option.meta}
+                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </section>
 
@@ -334,7 +401,7 @@ function getLobbyDescription({
         return "Pick a boss, mark yourself ready, wait for the squad, then enter the boss fight when the host starts.";
     }
 
-    return "Take a slot in the squad, wait for the host to choose a boss, and prepare for the rhythm battle.";
+    return "Take a slot in the squad, wait for the host to choose a boss and combat mode, then prepare for the fight.";
 }
 
 function getBossSelectorHint({
@@ -516,4 +583,59 @@ function formatStatusLabel(status: string): string {
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ");
+}
+
+const COMBAT_MODE_OPTIONS: Array<{
+    id: RaidCombatMode;
+    icon: string;
+    title: string;
+    description: string;
+    meta: string;
+}> = [
+    {
+        id: "rhythm",
+        icon: "🎵",
+        title: "Rhythm Raid",
+        description: "Classic timing fight with falling notes.",
+        meta: "Timing • Team sync"
+    },
+    {
+        id: "beatdown",
+        icon: "🥊",
+        title: "Beatdown Fight",
+        description: "Punch, alternate hands, charge kick, break the boss.",
+        meta: "Clicker • Stamina"
+    }
+];
+
+function formatCombatModeLabel(combatMode: RaidCombatMode): string {
+    if (combatMode === "beatdown") {
+        return "Beatdown";
+    }
+
+    return "Rhythm";
+}
+
+function getCombatModeSelectorHint({
+                                       isHost,
+                                       isCombatModeSelecting,
+                                       isUserInLobby
+                                   }: {
+    isHost: boolean;
+    isCombatModeSelecting: boolean;
+    isUserInLobby: boolean;
+}): string {
+    if (isCombatModeSelecting) {
+        return "Changing combat mode and resetting ready state.";
+    }
+
+    if (isHost) {
+        return "Pick how the squad will fight. Changing mode resets ready state.";
+    }
+
+    if (isUserInLobby) {
+        return "Only the host can change combat mode.";
+    }
+
+    return "Join the raid to see the selected combat mode.";
 }

@@ -7,6 +7,7 @@ import type { RaidService } from "../raids/raid.service.js";
 import type {
     BattleInputKey,
     BeatdownHitType,
+    RaidCombatMode,
     Raid
 } from "../raids/raid.types.js";
 import type {
@@ -20,6 +21,7 @@ import type {
     SelectRaidBossPayload,
     ServerToClientEvents,
     SocketErrorPayload,
+    SelectRaidCombatModePayload,
     StartRaidPayload
 } from "./socket.types.js";
 
@@ -178,6 +180,36 @@ export function setupSocketServer({
                 }
 
                 const result = await raidService.selectRaidBoss(parsedPayload);
+
+                if (!result.ok) {
+                    emitSocketError(socket, {
+                        code: result.reason,
+                        message: result.reason
+                    });
+                    return;
+                }
+
+                await socket.join(getRaidRoomName(result.raid.id));
+
+                emitRaidStateToRoom(io, result.raid);
+            } catch (error) {
+                emitInternalSocketError(socket, error);
+            }
+        });
+
+        socket.on("raid:selectCombatMode", async (payload) => {
+            try {
+                const parsedPayload = parseSelectRaidCombatModePayload(payload);
+
+                if (!parsedPayload) {
+                    emitSocketError(socket, {
+                        code: "invalid_payload",
+                        message: "raidId, telegramUserId and valid combatMode are required"
+                    });
+                    return;
+                }
+
+                const result = await raidService.selectRaidCombatMode(parsedPayload);
 
                 if (!result.ok) {
                     emitSocketError(socket, {
@@ -1126,6 +1158,40 @@ function parseSelectRaidBossPayload(
     };
 }
 
+function parseSelectRaidCombatModePayload(
+    payload: SelectRaidCombatModePayload
+): SelectRaidCombatModePayload | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    if (typeof payload.raidId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.telegramUserId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.combatMode !== "string") {
+        return null;
+    }
+
+    const raidId = payload.raidId.trim();
+    const telegramUserId = payload.telegramUserId.trim();
+    const combatMode = payload.combatMode.trim();
+
+    if (!raidId || !telegramUserId || !isRaidCombatMode(combatMode)) {
+        return null;
+    }
+
+    return {
+        raidId,
+        telegramUserId,
+        combatMode
+    };
+}
+
 function parseStartRaidPayload(payload: StartRaidPayload): StartRaidPayload | null {
     if (!payload || typeof payload !== "object") {
         return null;
@@ -1254,4 +1320,8 @@ function isBattleInputKey(key: string): key is BattleInputKey {
 
 function isBeatdownHitType(hitType: string): hitType is BeatdownHitType {
     return hitType === "left" || hitType === "right" || hitType === "kick";
+}
+
+function isRaidCombatMode(combatMode: string): combatMode is RaidCombatMode {
+    return combatMode === "rhythm" || combatMode === "beatdown";
 }

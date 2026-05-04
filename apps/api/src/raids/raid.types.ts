@@ -313,6 +313,28 @@ export type SelectRaidBossResult =
         | "invalid_boss_id";
 };
 
+export type SelectRaidCombatModeInput = {
+    raidId: string;
+    telegramUserId: string;
+    combatMode: RaidCombatMode;
+};
+
+export type SelectRaidCombatModeResult =
+    | {
+    ok: true;
+    raid: Raid;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "raid_expired"
+        | "raid_not_joinable"
+        | "player_not_in_raid"
+        | "only_host_can_select_combat_mode"
+        | "invalid_combat_mode";
+};
+
 export type StartRaidInput = {
     raidId: string;
     telegramUserId: string;

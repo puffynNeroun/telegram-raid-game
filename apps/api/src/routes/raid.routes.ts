@@ -37,6 +37,16 @@ type ParsedOptionalCombatModeResult =
     error: "invalid_combat_mode";
 };
 
+type ParsedRequiredCombatModeResult =
+    | {
+    ok: true;
+    combatMode: RaidCombatMode;
+}
+    | {
+    ok: false;
+    error: "combatMode is required" | "invalid_combat_mode";
+};
+
 const VALID_COMBAT_MODES = new Set<RaidCombatMode>(["rhythm", "beatdown"]);
 
 export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Router {
@@ -254,6 +264,47 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
         });
     });
 
+    router.post("/raids/:raidId/combat-mode", async (req, res) => {
+        const telegramUserId = String(req.body?.telegramUserId ?? "").trim();
+        const parsedCombatMode = parseRequiredCombatMode(req.body?.combatMode);
+
+        if (!telegramUserId) {
+            res.status(400).json({
+                ok: false,
+                error: "telegramUserId is required"
+            });
+            return;
+        }
+
+        if (!parsedCombatMode.ok) {
+            res.status(400).json({
+                ok: false,
+                error: parsedCombatMode.error
+            });
+            return;
+        }
+
+        const result = await raidService.selectRaidCombatMode({
+            raidId: req.params.raidId,
+            telegramUserId,
+            combatMode: parsedCombatMode.combatMode
+        });
+
+        if (!result.ok) {
+            res.status(getStatusCodeByReason(result.reason)).json({
+                ok: false,
+                error: result.reason
+            });
+            return;
+        }
+
+        res.json({
+            ok: true,
+            raid: result.raid,
+            serverTime: Date.now()
+        });
+    });
+
     router.post("/raids/:raidId/start", async (req, res) => {
         const telegramUserId = String(req.body?.telegramUserId ?? "").trim();
 
@@ -355,6 +406,29 @@ function parseOptionalCombatMode(value: unknown): ParsedOptionalCombatModeResult
     };
 }
 
+function parseRequiredCombatMode(value: unknown): ParsedRequiredCombatModeResult {
+    const rawCombatMode = String(value ?? "").trim();
+
+    if (!rawCombatMode) {
+        return {
+            ok: false,
+            error: "combatMode is required"
+        };
+    }
+
+    if (!isRaidCombatMode(rawCombatMode)) {
+        return {
+            ok: false,
+            error: "invalid_combat_mode"
+        };
+    }
+
+    return {
+        ok: true,
+        combatMode: rawCombatMode
+    };
+}
+
 function isRaidCombatMode(value: string): value is RaidCombatMode {
     return VALID_COMBAT_MODES.has(value as RaidCombatMode);
 }
@@ -371,7 +445,8 @@ function getStatusCodeByReason(reason: string): number {
         player_not_in_raid: 403,
         only_host_can_select_boss: 403,
         only_host_can_start: 403,
-        no_ready_players: 409
+        no_ready_players: 409,
+        only_host_can_select_combat_mode: 403
     };
 
     return statusCodeByReason[reason] ?? 400;

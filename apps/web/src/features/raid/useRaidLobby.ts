@@ -9,6 +9,7 @@ import type {
     CurrentUser,
     RaidState,
     ServerToClientEvents,
+    RaidCombatMode,
     SocketStatus
 } from "./types";
 import {
@@ -16,6 +17,7 @@ import {
     loadBossesApi,
     loadRaidApi,
     selectRaidBossApi,
+    selectRaidCombatModeApi,
     setReadyApi,
     startRaidApi
 } from "./raidApi";
@@ -45,6 +47,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const [isJoining, setIsJoining] = useState(false);
     const [isReadyUpdating, setIsReadyUpdating] = useState(false);
     const [isBossSelecting, setIsBossSelecting] = useState(false);
+    const [isCombatModeSelecting, setIsCombatModeSelecting] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
     const [isInputSending, setIsInputSending] = useState(false);
 
@@ -171,6 +174,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsBossSelecting(false);
+            setIsCombatModeSelecting(false);
             setIsStarting(false);
             setIsInputSending(false);
         });
@@ -182,6 +186,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsBossSelecting(false);
+            setIsCombatModeSelecting(false);
             setIsStarting(false);
             setIsInputSending(false);
         });
@@ -196,6 +201,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsBossSelecting(false);
+            setIsCombatModeSelecting(false);
             setIsStarting(false);
             setIsInputSending(false);
             setGameError(null);
@@ -207,6 +213,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setIsJoining(false);
             setIsReadyUpdating(false);
             setIsBossSelecting(false);
+            setIsCombatModeSelecting(false);
             setIsStarting(false);
             setIsInputSending(false);
         });
@@ -359,6 +366,52 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         [currentUser.id, raid, raidId]
     );
 
+    const selectCombatMode = useCallback(
+        async (combatMode: RaidCombatMode) => {
+            if (!raidId || !raid || raid.status !== "lobby") {
+                return;
+            }
+
+            if (raid.combatMode === combatMode) {
+                return;
+            }
+
+            setIsCombatModeSelecting(true);
+            setGameError(null);
+
+            const socket = socketRef.current;
+
+            if (socket?.connected) {
+                socket.emit("raid:selectCombatMode", {
+                    raidId,
+                    telegramUserId: currentUser.id,
+                    combatMode
+                });
+
+                return;
+            }
+
+            try {
+                const result = await selectRaidCombatModeApi({
+                    raidId,
+                    telegramUserId: currentUser.id,
+                    combatMode
+                });
+
+                setRaidState({
+                    status: "loaded",
+                    raid: result.raid,
+                    serverTime: result.serverTime
+                });
+            } catch (error) {
+                setGameError(getErrorMessage(error, "Failed to select combat mode"));
+            } finally {
+                setIsCombatModeSelecting(false);
+            }
+        },
+        [currentUser.id, raid, raidId]
+    );
+
     const startRaid = useCallback(async () => {
         if (!raidId) {
             return;
@@ -478,6 +531,8 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         setReady,
         selectBoss,
         startRaid,
+        isCombatModeSelecting,
+        selectCombatMode,
         sendBattleInput,
         sendBeatdownHit
     };

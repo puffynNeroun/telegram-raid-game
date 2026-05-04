@@ -50,6 +50,11 @@ type SelectRaidBossPayload = {
     serverTime: number;
 };
 
+type SelectRaidCombatModePayload = {
+    raid: Raid;
+    serverTime: number;
+};
+
 type StartRaidPayload = {
     raid: Raid;
     serverTime: number;
@@ -196,6 +201,32 @@ export async function selectRaidBossApi(input: {
     const data = await readApiJson<SelectRaidBossPayload>(response);
 
     assertApiSuccess(response, data, "Failed to select boss");
+
+    return {
+        raid: data.raid,
+        serverTime: Number(data.serverTime)
+    };
+}
+
+export async function selectRaidCombatModeApi(input: {
+    raidId: string;
+    telegramUserId: string;
+    combatMode: RaidCombatMode;
+}) {
+    const response = await fetch(`${apiUrl}/raids/${input.raidId}/combat-mode`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            telegramUserId: input.telegramUserId,
+            combatMode: input.combatMode
+        })
+    });
+
+    const data = await readApiJson<SelectRaidCombatModePayload>(response);
+
+    assertApiSuccess(response, data, "Failed to select combat mode");
 
     return {
         raid: data.raid,

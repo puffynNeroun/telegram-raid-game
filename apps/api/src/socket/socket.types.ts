@@ -2,9 +2,9 @@ import type {
     BattleInputKey,
     BeatdownHitType,
     BossId,
-    Raid
+    Raid,
+    RaidCombatMode
 } from "../raids/raid.types.js";
-
 export type JoinRaidRoomPayload = {
     raidId: string;
 };
@@ -25,6 +25,12 @@ export type SelectRaidBossPayload = {
     raidId: string;
     telegramUserId: string;
     bossId: BossId;
+};
+
+export type SelectRaidCombatModePayload = {
+    raidId: string;
+    telegramUserId: string;
+    combatMode: RaidCombatMode;
 };
 
 export type StartRaidPayload = {
@@ -68,6 +74,7 @@ export type ClientToServerEvents = {
     "battle:attack": (payload: BattleAttackPayload) => void;
     "battle:input": (payload: BattleInputPayload) => void;
     "battle:beatdownHit": (payload: BeatdownHitPayload) => void;
+    "raid:selectCombatMode": (payload: SelectRaidCombatModePayload) => void;
 };
 
 export type ServerToClientEvents = {

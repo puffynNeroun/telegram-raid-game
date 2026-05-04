@@ -23,6 +23,7 @@ import type {
     JoinRaidInput,
     JoinRaidResult,
     Raid,
+    RaidCombatMode,
     RaidPlayer,
     ResolveMissedNotesInput,
     ResolveMissedNotesResult,
@@ -30,14 +31,18 @@ import type {
     SetReadyResult,
     SelectRaidBossInput,
     SelectRaidBossResult,
+    SelectRaidCombatModeInput,
+    SelectRaidCombatModeResult,
     StartRaidInput,
     StartRaidResult
+
 } from "./raid.types.js";
 import {
     BATTLE_INPUT_KEYS,
     BATTLE_RESULT_TTL_SECONDS,
     BEATDOWN_HIT_TYPES,
     MAX_PLAYERS_PER_RAID,
+    RAID_COMBAT_MODES,
     RAID_TTL_SECONDS
 } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
@@ -301,6 +306,70 @@ export class RaidService {
             ...raid,
             bossId: bossConfig.id,
             combatMode: raid.combatMode ?? DEFAULT_COMBAT_MODE,
+            players: resetReadyState(raid.players)
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid
+        };
+    }
+    async selectRaidCombatMode(
+        input: SelectRaidCombatModeInput
+    ): Promise<SelectRaidCombatModeResult> {
+        if (!isRaidCombatMode(input.combatMode)) {
+            return {
+                ok: false,
+                reason: "invalid_combat_mode"
+            };
+        }
+
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        const lobbyValidationError = this.validateLobbyRaid(raid);
+
+        if (lobbyValidationError) {
+            return {
+                ok: false,
+                reason: lobbyValidationError
+            };
+        }
+
+        const player = raid.players[input.telegramUserId];
+
+        if (!player) {
+            return {
+                ok: false,
+                reason: "player_not_in_raid"
+            };
+        }
+
+        if (!player.isHost) {
+            return {
+                ok: false,
+                reason: "only_host_can_select_combat_mode"
+            };
+        }
+
+        if (raid.combatMode === input.combatMode) {
+            return {
+                ok: true,
+                raid
+            };
+        }
+
+        const updatedRaid: Raid = {
+            ...raid,
+            combatMode: input.combatMode,
             players: resetReadyState(raid.players)
         };
 
@@ -1736,4 +1805,8 @@ function isBattleInputKey(key: string): key is BattleInputKey {
 
 function isBeatdownHitType(hitType: string): hitType is BeatdownHitType {
     return BEATDOWN_HIT_TYPES.includes(hitType as BeatdownHitType);
+}
+
+function isRaidCombatMode(combatMode: string): combatMode is RaidCombatMode {
+    return RAID_COMBAT_MODES.includes(combatMode as RaidCombatMode);
 }

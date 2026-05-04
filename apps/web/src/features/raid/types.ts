@@ -195,6 +195,12 @@ export type SelectRaidBossPayload = {
     bossId: BossId;
 };
 
+export type SelectRaidCombatModePayload = {
+    raidId: string;
+    telegramUserId: string;
+    combatMode: RaidCombatMode;
+};
+
 export type StartRaidPayload = {
     raidId: string;
     telegramUserId: string;
@@ -236,6 +242,7 @@ export type ClientToServerEvents = {
     "battle:attack": (payload: BattleAttackPayload) => void;
     "battle:input": (payload: BattleInputPayload) => void;
     "battle:beatdownHit": (payload: BeatdownHitPayload) => void;
+    "raid:selectCombatMode": (payload: SelectRaidCombatModePayload) => void;
 };
 
 export type ServerToClientEvents = {
