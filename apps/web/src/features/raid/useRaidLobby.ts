@@ -110,7 +110,13 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     );
 
     useEffect(() => {
-        void loadBosses();
+        const timerId = window.setTimeout(() => {
+            void loadBosses();
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timerId);
+        };
     }, [loadBosses]);
 
     useEffect(() => {
@@ -160,11 +166,23 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
 
         socket.on("disconnect", () => {
             setSocketStatus("disconnected");
+
+            setIsJoining(false);
+            setIsReadyUpdating(false);
+            setIsBossSelecting(false);
+            setIsStarting(false);
+            setIsInputSending(false);
         });
 
         socket.on("connect_error", (error) => {
             setSocketStatus("error");
             setSocketError(error.message);
+
+            setIsJoining(false);
+            setIsReadyUpdating(false);
+            setIsBossSelecting(false);
+            setIsStarting(false);
+            setIsInputSending(false);
         });
 
         socket.on("raid:state", (payload) => {
@@ -306,6 +324,18 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
 
             setIsBossSelecting(true);
             setGameError(null);
+
+            const socket = socketRef.current;
+
+            if (socket?.connected) {
+                socket.emit("raid:selectBoss", {
+                    raidId,
+                    telegramUserId: currentUser.id,
+                    bossId
+                });
+
+                return;
+            }
 
             try {
                 const result = await selectRaidBossApi({

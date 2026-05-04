@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import type { Socket } from "socket.io";
 import type { RaidService } from "../raids/raid.service.js";
 import type { BattleInputKey, Raid } from "../raids/raid.types.js";
+import { isBossId } from "../raids/boss.config.js";
 import type {
     BattleAttackPayload,
     BattleInputPayload,
@@ -10,6 +11,7 @@ import type {
     JoinPlayerPayload,
     JoinRaidRoomPayload,
     PlayerReadyPayload,
+    SelectRaidBossPayload,
     ServerToClientEvents,
     SocketErrorPayload,
     StartRaidPayload
@@ -141,6 +143,36 @@ export function setupSocketServer({
                     });
                     return;
                 }
+
+                emitRaidStateToRoom(io, result.raid);
+            } catch (error) {
+                emitInternalSocketError(socket, error);
+            }
+        });
+
+        socket.on("raid:selectBoss", async (payload) => {
+            try {
+                const parsedPayload = parseSelectRaidBossPayload(payload);
+
+                if (!parsedPayload) {
+                    emitSocketError(socket, {
+                        code: "invalid_payload",
+                        message: "raidId, telegramUserId and valid bossId are required"
+                    });
+                    return;
+                }
+
+                const result = await raidService.selectRaidBoss(parsedPayload);
+
+                if (!result.ok) {
+                    emitSocketError(socket, {
+                        code: result.reason,
+                        message: result.reason
+                    });
+                    return;
+                }
+
+                await socket.join(getRaidRoomName(result.raid.id));
 
                 emitRaidStateToRoom(io, result.raid);
             } catch (error) {
@@ -864,6 +896,40 @@ function parsePlayerReadyPayload(
         raidId,
         telegramUserId,
         isReady: payload.isReady
+    };
+}
+
+function parseSelectRaidBossPayload(
+    payload: SelectRaidBossPayload
+): SelectRaidBossPayload | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    if (typeof payload.raidId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.telegramUserId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.bossId !== "string") {
+        return null;
+    }
+
+    const raidId = payload.raidId.trim();
+    const telegramUserId = payload.telegramUserId.trim();
+    const bossId = payload.bossId.trim();
+
+    if (!raidId || !telegramUserId || !isBossId(bossId)) {
+        return null;
+    }
+
+    return {
+        raidId,
+        telegramUserId,
+        bossId
     };
 }
 
