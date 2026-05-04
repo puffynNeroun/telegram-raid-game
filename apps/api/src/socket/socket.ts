@@ -815,6 +815,16 @@ function scheduleMissedNotesResolution({
         return;
     }
 
+    if (raid.battle.combatMode !== "rhythm") {
+        clearMissedNotesResolutionTimer(missedNotesTimers, raid.id);
+
+        console.log("[socket] skipped missed notes resolution:", {
+            raidId: raid.id,
+            combatMode: raid.battle.combatMode
+        });
+        return;
+    }
+
     clearMissedNotesResolutionTimer(missedNotesTimers, raid.id);
 
     const timerId = setInterval(() => {

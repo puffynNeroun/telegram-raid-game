@@ -46,12 +46,12 @@ import {
     RAID_TTL_SECONDS
 } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
+import { applyBeatdownHitToBattle } from "./beatdown.rules.js";
 import {
-    applyBeatdownHitToBattle,
-    BEATDOWN_KICK_CHARGE_MAX,
-    BEATDOWN_STAMINA_MAX,
-    BEATDOWN_STAMINA_REGEN_PER_SECOND
-} from "./beatdown.rules.js";
+    BEATDOWN_HP_MULTIPLIER_BY_PLAYERS,
+    BEATDOWN_PLAYER_BALANCE,
+    getBeatdownBossBalance
+} from "./beatdown.balance.js";
 
 type ApplyBattleDamageResult =
     | {
@@ -443,7 +443,7 @@ export class RaidService {
             battle,
             expiresAt:
                 now +
-                (bossConfig.durationSeconds + BATTLE_RESULT_TTL_SECONDS) * 1000
+                (battle.durationSeconds + BATTLE_RESULT_TTL_SECONDS) * 1000
         };
 
         await this.raidRepository.saveRaid(updatedRaid);
@@ -686,6 +686,14 @@ export class RaidService {
             };
         }
 
+        if (raid.battle.combatMode !== "rhythm") {
+            return {
+                ok: true,
+                raid,
+                resolvedCount: 0
+            };
+        }
+
         const now = Date.now();
         const bossConfig = resolveBattleBossConfig(raid.battle);
 
@@ -879,20 +887,24 @@ export class RaidService {
     }): BattleState {
         const players = Object.values(input.raid.players);
         const playerCount = players.length;
+        const combatMode = input.raid.combatMode ?? DEFAULT_COMBAT_MODE;
+        const battleBalance = getBattleBalance({
+            bossConfig: input.bossConfig,
+            combatMode
+        });
         const bossMaxHp = calculateBossHp({
             playerCount,
-            bossConfig: input.bossConfig
+            baseHp: battleBalance.baseHp,
+            hpMultiplierByPlayers: battleBalance.hpMultiplierByPlayers
         });
 
-        const endsAt = input.startedAt + input.bossConfig.durationSeconds * 1000;
+        const endsAt = input.startedAt + battleBalance.durationSeconds * 1000;
         const introEndsAt = input.startedAt + input.bossConfig.note.introCountdownMs;
         const noteSeed = createBattleNoteSeed({
             raidId: input.raid.id,
             bossId: input.bossConfig.id,
             startedAt: input.startedAt
         });
-
-        const combatMode = input.raid.combatMode ?? DEFAULT_COMBAT_MODE;
 
         return {
             status: "active",
@@ -905,7 +917,7 @@ export class RaidService {
             startedAt: input.startedAt,
             introEndsAt,
             endsAt,
-            durationSeconds: input.bossConfig.durationSeconds,
+            durationSeconds: battleBalance.durationSeconds,
 
             boss: {
                 id: input.bossConfig.id,
@@ -1021,13 +1033,13 @@ function createBeatdownState(input: {
                     telegramUserId: player.telegramUserId,
                     displayName: player.displayName,
 
-                    stamina: BEATDOWN_STAMINA_MAX,
-                    staminaMax: BEATDOWN_STAMINA_MAX,
-                    staminaRegenPerSecond: BEATDOWN_STAMINA_REGEN_PER_SECOND,
+                    stamina: BEATDOWN_PLAYER_BALANCE.staminaMax,
+                    staminaMax: BEATDOWN_PLAYER_BALANCE.staminaMax,
+                    staminaRegenPerSecond: BEATDOWN_PLAYER_BALANCE.staminaRegenPerSecond,
                     lastStaminaUpdatedAt: input.now,
 
                     kickCharge: 0,
-                    kickChargeMax: BEATDOWN_KICK_CHARGE_MAX,
+                    kickChargeMax: BEATDOWN_PLAYER_BALANCE.kickChargeMax,
 
                     lastHitType: null,
                     lastHitAt: null,
@@ -1715,16 +1727,42 @@ function isPlayerDefeated(player: BattlePlayerState): boolean {
 
 function calculateBossHp(input: {
     playerCount: number;
-    bossConfig: BossConfig;
+    baseHp: number;
+    hpMultiplierByPlayers: BossHpMultiplierByPlayers;
 }): number {
     const safePlayerCount = Math.min(
         Math.max(input.playerCount, 1),
         6
     ) as keyof BossHpMultiplierByPlayers;
 
-    const multiplier = input.bossConfig.hpMultiplierByPlayers[safePlayerCount];
+    const multiplier = input.hpMultiplierByPlayers[safePlayerCount];
 
-    return Math.round(input.bossConfig.baseHp * multiplier);
+    return Math.round(input.baseHp * multiplier);
+}
+
+function getBattleBalance(input: {
+    bossConfig: BossConfig;
+    combatMode: RaidCombatMode;
+}): {
+    durationSeconds: number;
+    baseHp: number;
+    hpMultiplierByPlayers: BossHpMultiplierByPlayers;
+} {
+    if (input.combatMode === "beatdown") {
+        const beatdownBossBalance = getBeatdownBossBalance(input.bossConfig);
+
+        return {
+            durationSeconds: beatdownBossBalance.durationSeconds,
+            baseHp: beatdownBossBalance.baseHp,
+            hpMultiplierByPlayers: BEATDOWN_HP_MULTIPLIER_BY_PLAYERS
+        };
+    }
+
+    return {
+        durationSeconds: input.bossConfig.durationSeconds,
+        baseHp: input.bossConfig.baseHp,
+        hpMultiplierByPlayers: input.bossConfig.hpMultiplierByPlayers
+    };
 }
 
 function getBossPhaseAfterDamage(currentHp: number, maxHp: number): BossPhase {

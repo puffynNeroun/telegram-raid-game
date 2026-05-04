@@ -1,3 +1,4 @@
+import { BEATDOWN_HIT_BALANCE } from "./beatdown.balance.js";
 import type {
     BattlePlayerState,
     BattleState,
@@ -37,19 +38,6 @@ export type ApplyBeatdownHitRuleResult =
         | "hit_on_cooldown";
 };
 
-const PUNCH_DAMAGE = 12;
-const PUNCH_KICK_CHARGE_GAIN = 12;
-const PUNCH_STAMINA_COST = 8;
-const PUNCH_COOLDOWN_MS = 105;
-
-const KICK_DAMAGE = 85;
-const KICK_REQUIRED_CHARGE = 100;
-const KICK_STAMINA_COST = 30;
-const KICK_COOLDOWN_MS = 650;
-
-export const BEATDOWN_STAMINA_MAX = 100;
-export const BEATDOWN_STAMINA_REGEN_PER_SECOND = 28;
-export const BEATDOWN_KICK_CHARGE_MAX = 100;
 
 export function applyBeatdownHitToBattle(
     input: ApplyBeatdownHitRuleInput
@@ -104,7 +92,7 @@ export function applyBeatdownHitToBattle(
         };
     }
 
-    if (input.hitType === "kick" && restedBeatdownPlayer.kickCharge < KICK_REQUIRED_CHARGE) {
+    if (input.hitType === "kick" && restedBeatdownPlayer.kickCharge < BEATDOWN_HIT_BALANCE.kickRequiredCharge) {
         return {
             ok: false,
             reason: "kick_not_charged"
@@ -198,18 +186,18 @@ function isRepeatedPunch(input: {
 
 function getDamageByHitType(hitType: BeatdownHitType): number {
     if (hitType === "kick") {
-        return KICK_DAMAGE;
+        return BEATDOWN_HIT_BALANCE.kickDamage;
     }
 
-    return PUNCH_DAMAGE;
+    return BEATDOWN_HIT_BALANCE.punchDamage;
 }
 
 function getStaminaCostByHitType(hitType: BeatdownHitType): number {
     if (hitType === "kick") {
-        return KICK_STAMINA_COST;
+        return BEATDOWN_HIT_BALANCE.kickStaminaCost;
     }
 
-    return PUNCH_STAMINA_COST;
+    return BEATDOWN_HIT_BALANCE.punchStaminaCost;
 }
 
 function isHitOnCooldown(input: {
@@ -222,14 +210,14 @@ function isHitOnCooldown(input: {
             return false;
         }
 
-        return input.now - input.player.lastKickAt < KICK_COOLDOWN_MS;
+        return input.now - input.player.lastKickAt < BEATDOWN_HIT_BALANCE.kickCooldownMs;
     }
 
     if (!input.player.lastHitAt) {
         return false;
     }
 
-    return input.now - input.player.lastHitAt < PUNCH_COOLDOWN_MS;
+    return input.now - input.player.lastHitAt < BEATDOWN_HIT_BALANCE.punchCooldownMs;
 }
 
 function updateBattlePlayerAfterBeatdownHit(input: {
@@ -287,7 +275,7 @@ function updateBeatdownPlayerAfterHit(input: {
 
         kickCharge: Math.min(
             input.player.kickChargeMax,
-            input.player.kickCharge + PUNCH_KICK_CHARGE_GAIN
+            input.player.kickCharge + BEATDOWN_HIT_BALANCE.punchKickChargeGain
         ),
 
         lastHitType: input.hitType,
