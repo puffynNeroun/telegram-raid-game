@@ -390,6 +390,37 @@ export type BattleInputActionResult =
         | "invalid_input_key";
 };
 
+export type BeatdownHitInput = {
+    raidId: string;
+    telegramUserId: string;
+    hitType: BeatdownHitType;
+};
+
+export type BeatdownHitResult =
+    | {
+    ok: true;
+    raid: Raid;
+    hitType: BeatdownHitType;
+    damageDealt: number;
+    combo: number;
+    kickCharge: number;
+    kickChargeMax: number;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "no_active_battle"
+        | "battle_expired"
+        | "wrong_combat_mode"
+        | "beatdown_state_missing"
+        | "player_not_in_battle"
+        | "player_defeated"
+        | "kick_not_charged"
+        | "hit_on_cooldown"
+        | "invalid_beatdown_hit_type";
+};
+
 export type ResolveMissedNotesInput = {
     raidId: string;
 };

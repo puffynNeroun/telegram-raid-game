@@ -3,6 +3,9 @@ import { DEFAULT_BOSS_ID, getBossConfig, isBossId } from "./boss.config.js";
 import type {
     BattleAttackInput,
     BattleAttackResult,
+    BeatdownHitInput,
+    BeatdownHitResult,
+    BeatdownHitType,
     BeatdownState,
     BattleInputActionInput,
     BattleInputActionResult,
@@ -33,10 +36,12 @@ import type {
 import {
     BATTLE_INPUT_KEYS,
     BATTLE_RESULT_TTL_SECONDS,
+    BEATDOWN_HIT_TYPES,
     MAX_PLAYERS_PER_RAID,
     RAID_TTL_SECONDS
 } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
+import { applyBeatdownHitToBattle } from "./beatdown.rules.js";
 
 type ApplyBattleDamageResult =
     | {
@@ -518,6 +523,72 @@ export class RaidService {
             damageDealt: inputResult.damageDealt,
             damageTaken: inputResult.damageTaken,
             combo: inputResult.combo
+        };
+    }
+
+    async applyBeatdownHit(input: BeatdownHitInput): Promise<BeatdownHitResult> {
+        if (!isBeatdownHitType(input.hitType)) {
+            return {
+                ok: false,
+                reason: "invalid_beatdown_hit_type"
+            };
+        }
+
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        if (!this.isActiveBattleRaid(raid)) {
+            return {
+                ok: false,
+                reason: "no_active_battle"
+            };
+        }
+
+        const now = Date.now();
+
+        if (now >= raid.battle.endsAt) {
+            return {
+                ok: false,
+                reason: "battle_expired"
+            };
+        }
+
+        const hitResult = applyBeatdownHitToBattle({
+            battle: raid.battle,
+            telegramUserId: input.telegramUserId,
+            hitType: input.hitType,
+            now
+        });
+
+        if (!hitResult.ok) {
+            return {
+                ok: false,
+                reason: hitResult.reason
+            };
+        }
+
+        const updatedRaid = buildRaidAfterBattleChange({
+            raid,
+            battle: hitResult.battle,
+            finishedAt: now
+        });
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid,
+            hitType: input.hitType,
+            damageDealt: hitResult.damageDealt,
+            combo: hitResult.combo,
+            kickCharge: hitResult.kickCharge,
+            kickChargeMax: hitResult.kickChargeMax
         };
     }
 
@@ -1646,4 +1717,8 @@ function hashStringToUint32(value: string): number {
 
 function isBattleInputKey(key: string): key is BattleInputKey {
     return BATTLE_INPUT_KEYS.includes(key as BattleInputKey);
+}
+
+function isBeatdownHitType(hitType: string): hitType is BeatdownHitType {
+    return BEATDOWN_HIT_TYPES.includes(hitType as BeatdownHitType);
 }

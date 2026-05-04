@@ -4,10 +4,15 @@ import type { Socket } from "socket.io";
 import type { TelegramBotRuntime } from "../bot/bot.js";
 import { isBossId } from "../raids/boss.config.js";
 import type { RaidService } from "../raids/raid.service.js";
-import type { BattleInputKey, Raid } from "../raids/raid.types.js";
+import type {
+    BattleInputKey,
+    BeatdownHitType,
+    Raid
+} from "../raids/raid.types.js";
 import type {
     BattleAttackPayload,
     BattleInputPayload,
+    BeatdownHitPayload,
     ClientToServerEvents,
     JoinPlayerPayload,
     JoinRaidRoomPayload,
@@ -299,6 +304,56 @@ export function setupSocketServer({
                 }
 
                 const result = await raidService.applyBattleInput(parsedPayload);
+
+                if (!result.ok) {
+                    const handled = await handleFailedBattleAction({
+                        io,
+                        socket,
+                        raidService,
+                        raidId: parsedPayload.raidId,
+                        reason: result.reason,
+                        finalizationTimers: battleFinalizationTimers,
+                        missedNotesTimers: missedNotesResolutionTimers,
+                        getTelegramBot
+                    });
+
+                    if (handled) {
+                        return;
+                    }
+
+                    emitSocketError(socket, {
+                        code: result.reason,
+                        message: result.reason
+                    });
+                    return;
+                }
+
+                handleSuccessfulBattleAction({
+                    io,
+                    raidService,
+                    raid: result.raid,
+                    finalizationTimers: battleFinalizationTimers,
+                    missedNotesTimers: missedNotesResolutionTimers,
+                    getTelegramBot
+                });
+            } catch (error) {
+                emitInternalSocketError(socket, error);
+            }
+        });
+
+        socket.on("battle:beatdownHit", async (payload) => {
+            try {
+                const parsedPayload = parseBeatdownHitPayload(payload);
+
+                if (!parsedPayload) {
+                    emitSocketError(socket, {
+                        code: "invalid_payload",
+                        message: "raidId, telegramUserId and valid hitType are required"
+                    });
+                    return;
+                }
+
+                const result = await raidService.applyBeatdownHit(parsedPayload);
 
                 if (!result.ok) {
                     const handled = await handleFailedBattleAction({
@@ -1159,6 +1214,44 @@ function parseBattleInputPayload(
     };
 }
 
+function parseBeatdownHitPayload(
+    payload: BeatdownHitPayload
+): BeatdownHitPayload | null {
+    if (!payload || typeof payload !== "object") {
+        return null;
+    }
+
+    if (typeof payload.raidId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.telegramUserId !== "string") {
+        return null;
+    }
+
+    if (typeof payload.hitType !== "string") {
+        return null;
+    }
+
+    const raidId = payload.raidId.trim();
+    const telegramUserId = payload.telegramUserId.trim();
+    const hitType = payload.hitType.trim();
+
+    if (!raidId || !telegramUserId || !isBeatdownHitType(hitType)) {
+        return null;
+    }
+
+    return {
+        raidId,
+        telegramUserId,
+        hitType
+    };
+}
+
 function isBattleInputKey(key: string): key is BattleInputKey {
     return key === "left" || key === "up" || key === "down" || key === "right";
+}
+
+function isBeatdownHitType(hitType: string): hitType is BeatdownHitType {
+    return hitType === "left" || hitType === "right" || hitType === "kick";
 }
