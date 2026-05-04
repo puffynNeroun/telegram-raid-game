@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createRaidApi } from "./raidApi";
 import { getCurrentUser, initTelegramWebApp } from "./telegram";
 import { useRaidLobby } from "./useRaidLobby";
 import { RaidBattleScreen } from "./screens/RaidBattleScreen";
@@ -7,13 +8,17 @@ import { RaidLobbyScreen } from "./screens/RaidLobbyScreen";
 import { RaidLoadingScreen } from "./screens/RaidLoadingScreen";
 import { RaidMissingScreen } from "./screens/RaidMissingScreen";
 import { RaidResultScreen } from "./screens/RaidResultScreen";
-import type { BattleState, Raid } from "./types";
+import type { BattleState, BossId, Raid } from "./types";
 
 type BattleConclusionState = {
     raid: Raid;
     battle: BattleState;
     outcome: Exclude<BattleState["outcome"], null>;
     revealedAt: number;
+};
+
+type CreateFollowUpRaidInput = {
+    bossId: BossId;
 };
 
 const BATTLE_CONCLUSION_REVEAL_MS = 3000;
@@ -33,6 +38,9 @@ export function RaidGame() {
 
     const [battleConclusion, setBattleConclusion] =
         useState<BattleConclusionState | null>(null);
+
+    const [isCreatingRaid, setIsCreatingRaid] = useState(false);
+    const [raidActionError, setRaidActionError] = useState<string | null>(null);
 
     const {
         raidState,
@@ -79,6 +87,7 @@ export function RaidGame() {
         }
 
         setBattleConclusion(null);
+        setRaidActionError(null);
         lastActiveBattleRaidIdRef.current = null;
 
         if (conclusionTimerRef.current) {
@@ -164,6 +173,53 @@ export function RaidGame() {
         void loadRaid(raidId);
     };
 
+    const createFollowUpRaid = async ({ bossId }: CreateFollowUpRaidInput) => {
+        if (!raid || isCreatingRaid) {
+            return;
+        }
+
+        setIsCreatingRaid(true);
+        setRaidActionError(null);
+
+        try {
+            const result = await createRaidApi({
+                telegramChatId: raid.telegramChatId,
+                hostTelegramUserId: currentUser.id,
+                hostDisplayName: currentUser.displayName,
+                bossId
+            });
+
+            openRaid({
+                raidId: result.raid.id,
+                chatId: result.raid.telegramChatId
+            });
+        } catch (error) {
+            setRaidActionError(getErrorMessage(error));
+        } finally {
+            setIsCreatingRaid(false);
+        }
+    };
+
+    const retryCurrentBoss = () => {
+        if (!raid) {
+            return;
+        }
+
+        void createFollowUpRaid({
+            bossId: raid.bossId
+        });
+    };
+
+    const createNewRaid = () => {
+        if (!raid) {
+            return;
+        }
+
+        void createFollowUpRaid({
+            bossId: raid.bossId
+        });
+    };
+
     if (raidState.status === "loading" || raidState.status === "idle") {
         return (
             <RaidLoadingScreen
@@ -244,7 +300,11 @@ export function RaidGame() {
                 socketStatus={socketStatus}
                 socketError={socketError}
                 gameError={gameError}
+                isCreatingRaid={isCreatingRaid}
+                raidActionError={raidActionError}
                 onRefresh={refreshRaid}
+                onRetryBoss={retryCurrentBoss}
+                onCreateNewRaid={createNewRaid}
             />
         );
     }
@@ -301,4 +361,21 @@ function getBattleOutcome(
     }
 
     return battle.boss.hp <= 0 ? "win" : "lose";
+}
+
+function openRaid(input: { raidId: string; chatId: string }) {
+    const nextParams = new URLSearchParams(window.location.search);
+
+    nextParams.set("raidId", input.raidId);
+    nextParams.set("chatId", input.chatId);
+
+    window.location.assign(`${window.location.pathname}?${nextParams.toString()}`);
+}
+
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return "Failed to create a new raid.";
 }

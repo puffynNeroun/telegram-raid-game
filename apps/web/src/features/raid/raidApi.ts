@@ -1,10 +1,11 @@
-import type { Raid, RaidPlayer } from "./types";
+import type { BossId, Raid, RaidPlayer } from "./types";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 type ApiErrorResponse = {
     ok: false;
     error?: string;
+    activeRaid?: Raid | null;
 };
 
 type ApiSuccessResponse<TPayload> = {
@@ -12,6 +13,11 @@ type ApiSuccessResponse<TPayload> = {
 } & TPayload;
 
 type ApiResponse<TPayload> = ApiSuccessResponse<TPayload> | ApiErrorResponse;
+
+type CreateRaidPayload = {
+    raid: Raid;
+    serverTime: number;
+};
 
 type LoadRaidPayload = {
     raid: Raid;
@@ -31,6 +37,50 @@ type ReadyRaidPayload = {
 type StartRaidPayload = {
     raid: Raid;
 };
+
+export async function createRaidApi(input: {
+    telegramChatId: string;
+    hostTelegramUserId: string;
+    hostDisplayName: string;
+    bossId?: BossId;
+}) {
+    const response = await fetch(`${apiUrl}/raids`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            telegramChatId: input.telegramChatId,
+            hostTelegramUserId: input.hostTelegramUserId,
+            hostDisplayName: input.hostDisplayName,
+            bossId: input.bossId
+        })
+    });
+
+    const data = await readApiJson<CreateRaidPayload>(response);
+
+    if (!response.ok) {
+        if (isActiveRaidExistsResponse(data) && data.activeRaid) {
+            return {
+                raid: data.activeRaid,
+                serverTime: Date.now(),
+                reusedActiveRaid: true
+            };
+        }
+
+        throw new Error(getApiErrorMessage(data, `API returned ${response.status}`));
+    }
+
+    if (isApiErrorResponse(data)) {
+        throw new Error(data.error ?? "Failed to create raid");
+    }
+
+    return {
+        raid: data.raid,
+        serverTime: Number(data.serverTime),
+        reusedActiveRaid: false
+    };
+}
 
 export async function loadRaidApi(raidId: string) {
     const response = await fetch(`${apiUrl}/raids/${raidId}`);
@@ -153,5 +203,16 @@ function isApiErrorResponse(data: unknown): data is ApiErrorResponse {
         data !== null &&
         "ok" in data &&
         (data as { ok: unknown }).ok === false
+    );
+}
+
+function isActiveRaidExistsResponse(
+    data: unknown
+): data is ApiErrorResponse & { error: "active_raid_exists"; activeRaid: Raid } {
+    return (
+        isApiErrorResponse(data) &&
+        data.error === "active_raid_exists" &&
+        typeof data.activeRaid === "object" &&
+        data.activeRaid !== null
     );
 }

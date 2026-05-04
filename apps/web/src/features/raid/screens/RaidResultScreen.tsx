@@ -15,7 +15,11 @@ type RaidResultScreenProps = {
     socketStatus: SocketStatus;
     socketError: string | null;
     gameError: string | null;
+    isCreatingRaid: boolean;
+    raidActionError: string | null;
     onRefresh: () => void;
+    onRetryBoss: () => void;
+    onCreateNewRaid: () => void;
 };
 
 type BattleResultOutcome = Exclude<BattleState["outcome"], null>;
@@ -31,7 +35,11 @@ export function RaidResultScreen({
                                      socketStatus,
                                      socketError,
                                      gameError,
-                                     onRefresh
+                                     isCreatingRaid,
+                                     raidActionError,
+                                     onRefresh,
+                                     onRetryBoss,
+                                     onCreateNewRaid
                                  }: RaidResultScreenProps) {
     const outcome = getResolvedOutcome(battle);
     const isVictory = outcome === "win";
@@ -54,6 +62,7 @@ export function RaidResultScreen({
     const resultToneClassName = isVictory ? "is-win" : "is-lose";
     const outcomeLabel = isVictory ? "Victory" : "Failed";
     const outcomeTitle = isVictory ? "Boss defeated" : "Raid failed";
+    const primaryActionLabel = isVictory ? "Run again" : "Retry boss";
     const outcomeDescription = getOutcomeDescription({
         outcome,
         bossName: battle.boss.name
@@ -100,6 +109,10 @@ export function RaidResultScreen({
 
                 {gameError && <div className="game-error-banner">{gameError}</div>}
 
+                {raidActionError && (
+                    <div className="game-error-banner">{raidActionError}</div>
+                )}
+
                 <section
                     className={`raid-result-hero ${resultToneClassName}`}
                     aria-label="Raid result summary"
@@ -121,6 +134,59 @@ export function RaidResultScreen({
                     <div className="raid-result-time-badge">
                         <span>{battleTimeLabel}</span>
                         <strong>{battleTimeValue}</strong>
+                    </div>
+                </section>
+
+                <section className="raid-result-actions" aria-label="Raid result actions">
+                    <div className="raid-result-actions-copy">
+                        <p className="eyebrow">Next action</p>
+                        <h2>Choose the next raid step</h2>
+                        <p>
+                            Start another lobby from this result screen instead of going
+                            back to the Telegram group manually.
+                        </p>
+                    </div>
+
+                    <div className="raid-result-actions-grid">
+                        <button
+                            className="raid-result-action-button raid-result-primary-action"
+                            type="button"
+                            disabled={isCreatingRaid}
+                            onClick={onRetryBoss}
+                        >
+                            <span>{isCreatingRaid ? "Creating..." : primaryActionLabel}</span>
+                            <small>Same boss, fresh lobby</small>
+                        </button>
+
+                        <button
+                            className="raid-result-action-button raid-result-secondary-action"
+                            type="button"
+                            disabled={isCreatingRaid}
+                            onClick={onCreateNewRaid}
+                        >
+                            <span>{isCreatingRaid ? "Creating..." : "New raid"}</span>
+                            <small>Create a new lobby</small>
+                        </button>
+
+                        <button
+                            className="raid-result-action-button raid-result-disabled-action"
+                            type="button"
+                            disabled
+                            title="Boss progression will be added after the core loop is stable."
+                        >
+                            <span>Next boss</span>
+                            <small>Progression locked</small>
+                        </button>
+
+                        <button
+                            className="raid-result-action-button raid-result-secondary-action"
+                            type="button"
+                            disabled={isCreatingRaid}
+                            onClick={onRefresh}
+                        >
+                            <span>Refresh</span>
+                            <small>Reload current result</small>
+                        </button>
                     </div>
                 </section>
 
@@ -228,6 +294,7 @@ export function RaidResultScreen({
                         <button
                             className="ghost-button raid-result-refresh-button"
                             type="button"
+                            disabled={isCreatingRaid}
                             onClick={onRefresh}
                         >
                             Refresh
