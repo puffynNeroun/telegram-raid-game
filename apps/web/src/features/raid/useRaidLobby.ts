@@ -2,13 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
     BattleInputKey,
+    BossCatalogItem,
+    BossId,
     ClientToServerEvents,
     CurrentUser,
     RaidState,
     ServerToClientEvents,
     SocketStatus
 } from "./types";
-import { joinRaidApi, loadRaidApi, setReadyApi, startRaidApi } from "./raidApi";
+import {
+    joinRaidApi,
+    loadBossesApi,
+    loadRaidApi,
+    selectRaidBossApi,
+    setReadyApi,
+    startRaidApi
+} from "./raidApi";
 
 type UseRaidLobbyOptions = {
     raidId: string | null;
@@ -28,8 +37,13 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const [socketError, setSocketError] = useState<string | null>(null);
     const [gameError, setGameError] = useState<string | null>(null);
 
+    const [bosses, setBosses] = useState<BossCatalogItem[]>([]);
+    const [isBossesLoading, setIsBossesLoading] = useState(false);
+    const [bossesError, setBossesError] = useState<string | null>(null);
+
     const [isJoining, setIsJoining] = useState(false);
     const [isReadyUpdating, setIsReadyUpdating] = useState(false);
+    const [isBossSelecting, setIsBossSelecting] = useState(false);
     const [isStarting, setIsStarting] = useState(false);
     const [isInputSending, setIsInputSending] = useState(false);
 
@@ -54,6 +68,21 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
     const effectiveSocketStatus: SocketStatus =
         raidId && socketStatus === "idle" ? "connecting" : socketStatus;
 
+    const loadBosses = useCallback(async () => {
+        setIsBossesLoading(true);
+        setBossesError(null);
+
+        try {
+            const result = await loadBossesApi();
+
+            setBosses(result.bosses);
+        } catch (error) {
+            setBossesError(getErrorMessage(error, "Failed to load bosses"));
+        } finally {
+            setIsBossesLoading(false);
+        }
+    }, []);
+
     const loadRaid = useCallback(
         async (nextRaidId = raidId) => {
             if (!nextRaidId) {
@@ -73,12 +102,16 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             } catch (error) {
                 setRaidState({
                     status: "error",
-                    message: error instanceof Error ? error.message : "Unknown error"
+                    message: getErrorMessage(error, "Unknown error")
                 });
             }
         },
         [raidId]
     );
+
+    useEffect(() => {
+        void loadBosses();
+    }, [loadBosses]);
 
     useEffect(() => {
         const timerId = window.setInterval(() => {
@@ -143,6 +176,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
 
             setIsJoining(false);
             setIsReadyUpdating(false);
+            setIsBossSelecting(false);
             setIsStarting(false);
             setIsInputSending(false);
             setGameError(null);
@@ -153,6 +187,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
 
             setIsJoining(false);
             setIsReadyUpdating(false);
+            setIsBossSelecting(false);
             setIsStarting(false);
             setIsInputSending(false);
         });
@@ -207,7 +242,7 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         } catch (error) {
             setRaidState({
                 status: "error",
-                message: error instanceof Error ? error.message : "Unknown error"
+                message: getErrorMessage(error, "Unknown error")
             });
         } finally {
             setIsJoining(false);
@@ -250,13 +285,47 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             } catch (error) {
                 setRaidState({
                     status: "error",
-                    message: error instanceof Error ? error.message : "Unknown error"
+                    message: getErrorMessage(error, "Unknown error")
                 });
             } finally {
                 setIsReadyUpdating(false);
             }
         },
         [currentUser.id, raidId]
+    );
+
+    const selectBoss = useCallback(
+        async (bossId: BossId) => {
+            if (!raidId || !raid || raid.status !== "lobby") {
+                return;
+            }
+
+            if (raid.bossId === bossId) {
+                return;
+            }
+
+            setIsBossSelecting(true);
+            setGameError(null);
+
+            try {
+                const result = await selectRaidBossApi({
+                    raidId,
+                    telegramUserId: currentUser.id,
+                    bossId
+                });
+
+                setRaidState({
+                    status: "loaded",
+                    raid: result.raid,
+                    serverTime: result.serverTime
+                });
+            } catch (error) {
+                setGameError(getErrorMessage(error, "Failed to select boss"));
+            } finally {
+                setIsBossSelecting(false);
+            }
+        },
+        [currentUser.id, raid, raidId]
     );
 
     const startRaid = useCallback(async () => {
@@ -287,12 +356,12 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
             setRaidState({
                 status: "loaded",
                 raid: result.raid,
-                serverTime: Date.now()
+                serverTime: result.serverTime
             });
         } catch (error) {
             setRaidState({
                 status: "error",
-                message: error instanceof Error ? error.message : "Unknown error"
+                message: getErrorMessage(error, "Unknown error")
             });
         } finally {
             setIsStarting(false);
@@ -333,18 +402,32 @@ export function useRaidLobby({ raidId, currentUser }: UseRaidLobbyOptions) {
         currentPlayer,
         readyPlayersCount,
         canStart,
+        bosses,
+        isBossesLoading,
+        bossesError,
         localNow,
         socketStatus: effectiveSocketStatus,
         socketError,
         gameError,
         isJoining,
         isReadyUpdating,
+        isBossSelecting,
         isStarting,
         isInputSending,
+        loadBosses,
         loadRaid,
         joinRaid,
         setReady,
+        selectBoss,
         startRaid,
         sendBattleInput
     };
+}
+
+function getErrorMessage(error: unknown, fallbackMessage: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    return fallbackMessage;
 }

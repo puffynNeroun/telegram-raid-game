@@ -17,6 +17,16 @@ export type BossId =
     | "boss-005"
     | "boss-006";
 
+export type BossCatalogItem = {
+    id: BossId;
+    level: number;
+    name: string;
+    subtitle: string;
+    assetSlug: string;
+    durationSeconds: number;
+    baseHp: number;
+};
+
 export type RaidPlayer = {
     telegramUserId: string;
     displayName: string;
@@ -151,6 +161,12 @@ export type PlayerReadyPayload = {
     isReady: boolean;
 };
 
+export type SelectRaidBossPayload = {
+    raidId: string;
+    telegramUserId: string;
+    bossId: BossId;
+};
+
 export type StartRaidPayload = {
     raidId: string;
     telegramUserId: string;
@@ -181,6 +197,7 @@ export type ClientToServerEvents = {
     "raid:joinRoom": (payload: JoinRaidRoomPayload) => void;
     "player:join": (payload: JoinPlayerPayload) => void;
     "player:ready": (payload: PlayerReadyPayload) => void;
+    "raid:selectBoss": (payload: SelectRaidBossPayload) => void;
     "raid:start": (payload: StartRaidPayload) => void;
     "battle:attack": (payload: BattleAttackPayload) => void;
     "battle:input": (payload: BattleInputPayload) => void;

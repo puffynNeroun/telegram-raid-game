@@ -1,4 +1,4 @@
-import type { BossId, Raid, RaidPlayer } from "./types";
+import type { BossCatalogItem, BossId, Raid, RaidPlayer } from "./types";
 
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
@@ -13,6 +13,11 @@ type ApiSuccessResponse<TPayload> = {
 } & TPayload;
 
 type ApiResponse<TPayload> = ApiSuccessResponse<TPayload> | ApiErrorResponse;
+
+type BossesPayload = {
+    bosses: BossCatalogItem[];
+    serverTime: number;
+};
 
 type CreateRaidPayload = {
     raid: Raid;
@@ -34,9 +39,27 @@ type ReadyRaidPayload = {
     player: RaidPlayer;
 };
 
+type SelectRaidBossPayload = {
+    raid: Raid;
+    serverTime: number;
+};
+
 type StartRaidPayload = {
     raid: Raid;
+    serverTime: number;
 };
+
+export async function loadBossesApi() {
+    const response = await fetch(`${apiUrl}/bosses`);
+    const data = await readApiJson<BossesPayload>(response);
+
+    assertApiSuccess(response, data, "Failed to load bosses");
+
+    return {
+        bosses: data.bosses,
+        serverTime: Number(data.serverTime)
+    };
+}
 
 export async function createRaidApi(input: {
     telegramChatId: string;
@@ -146,6 +169,32 @@ export async function setReadyApi(input: {
     };
 }
 
+export async function selectRaidBossApi(input: {
+    raidId: string;
+    telegramUserId: string;
+    bossId: BossId;
+}) {
+    const response = await fetch(`${apiUrl}/raids/${input.raidId}/boss`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            telegramUserId: input.telegramUserId,
+            bossId: input.bossId
+        })
+    });
+
+    const data = await readApiJson<SelectRaidBossPayload>(response);
+
+    assertApiSuccess(response, data, "Failed to select boss");
+
+    return {
+        raid: data.raid,
+        serverTime: Number(data.serverTime)
+    };
+}
+
 export async function startRaidApi(input: {
     raidId: string;
     telegramUserId: string;
@@ -165,7 +214,8 @@ export async function startRaidApi(input: {
     assertApiSuccess(response, data, "Failed to start raid");
 
     return {
-        raid: data.raid
+        raid: data.raid,
+        serverTime: Number(data.serverTime)
     };
 }
 

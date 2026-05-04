@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getBossCatalog, isBossId } from "../raids/boss.config.js";
 import type { RaidService } from "../raids/raid.service.js";
 import type { BossId } from "../raids/raid.types.js";
 
@@ -6,7 +7,7 @@ type CreateRaidRouterOptions = {
     raidService: RaidService;
 };
 
-type ParsedBossIdResult =
+type ParsedOptionalBossIdResult =
     | {
     ok: true;
     bossId?: BossId;
@@ -16,17 +17,26 @@ type ParsedBossIdResult =
     error: "invalid_boss_id";
 };
 
-const BOSS_IDS: readonly BossId[] = [
-    "boss-001",
-    "boss-002",
-    "boss-003",
-    "boss-004",
-    "boss-005",
-    "boss-006"
-];
+type ParsedRequiredBossIdResult =
+    | {
+    ok: true;
+    bossId: BossId;
+}
+    | {
+    ok: false;
+    error: "bossId is required" | "invalid_boss_id";
+};
 
 export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Router {
     const router = Router();
+
+    router.get("/bosses", (_req, res) => {
+        res.json({
+            ok: true,
+            bosses: getBossCatalog(),
+            serverTime: Date.now()
+        });
+    });
 
     router.post("/raids", async (req, res) => {
         const telegramChatId = String(req.body?.telegramChatId ?? "").trim();
@@ -142,7 +152,8 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
         res.json({
             ok: true,
             raid: result.raid,
-            player: result.player
+            player: result.player,
+            serverTime: Date.now()
         });
     });
 
@@ -175,7 +186,49 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
         res.json({
             ok: true,
             raid: result.raid,
-            player: result.player
+            player: result.player,
+            serverTime: Date.now()
+        });
+    });
+
+    router.post("/raids/:raidId/boss", async (req, res) => {
+        const telegramUserId = String(req.body?.telegramUserId ?? "").trim();
+        const parsedBossId = parseRequiredBossId(req.body?.bossId);
+
+        if (!telegramUserId) {
+            res.status(400).json({
+                ok: false,
+                error: "telegramUserId is required"
+            });
+            return;
+        }
+
+        if (!parsedBossId.ok) {
+            res.status(400).json({
+                ok: false,
+                error: parsedBossId.error
+            });
+            return;
+        }
+
+        const result = await raidService.selectRaidBoss({
+            raidId: req.params.raidId,
+            telegramUserId,
+            bossId: parsedBossId.bossId
+        });
+
+        if (!result.ok) {
+            res.status(getStatusCodeByReason(result.reason)).json({
+                ok: false,
+                error: result.reason
+            });
+            return;
+        }
+
+        res.json({
+            ok: true,
+            raid: result.raid,
+            serverTime: Date.now()
         });
     });
 
@@ -205,14 +258,15 @@ export function createRaidRouter({ raidService }: CreateRaidRouterOptions): Rout
 
         res.json({
             ok: true,
-            raid: result.raid
+            raid: result.raid,
+            serverTime: Date.now()
         });
     });
 
     return router;
 }
 
-function parseOptionalBossId(value: unknown): ParsedBossIdResult {
+function parseOptionalBossId(value: unknown): ParsedOptionalBossIdResult {
     const rawBossId = String(value ?? "").trim();
 
     if (!rawBossId) {
@@ -234,8 +288,27 @@ function parseOptionalBossId(value: unknown): ParsedBossIdResult {
     };
 }
 
-function isBossId(value: string): value is BossId {
-    return BOSS_IDS.includes(value as BossId);
+function parseRequiredBossId(value: unknown): ParsedRequiredBossIdResult {
+    const rawBossId = String(value ?? "").trim();
+
+    if (!rawBossId) {
+        return {
+            ok: false,
+            error: "bossId is required"
+        };
+    }
+
+    if (!isBossId(rawBossId)) {
+        return {
+            ok: false,
+            error: "invalid_boss_id"
+        };
+    }
+
+    return {
+        ok: true,
+        bossId: rawBossId
+    };
 }
 
 function getStatusCodeByReason(reason: string): number {
@@ -245,10 +318,11 @@ function getStatusCodeByReason(reason: string): number {
         raid_not_joinable: 409,
         raid_full: 409,
         active_raid_exists: 409,
+        invalid_boss_id: 400,
         player_not_in_raid: 403,
+        only_host_can_select_boss: 403,
         only_host_can_start: 403,
-        no_ready_players: 409,
-        invalid_boss_id: 400
+        no_ready_players: 409
     };
 
     return statusCodeByReason[reason] ?? 400;

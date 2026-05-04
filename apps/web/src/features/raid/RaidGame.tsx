@@ -17,11 +17,17 @@ type BattleConclusionState = {
     revealedAt: number;
 };
 
+type RaidActionErrorState = {
+    raidId: string;
+    message: string;
+};
+
 type CreateFollowUpRaidInput = {
     bossId: BossId;
 };
 
 const BATTLE_CONCLUSION_REVEAL_MS = 3000;
+const DEFAULT_BOSS_ID: BossId = "boss-001";
 
 export function RaidGame() {
     const params = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -30,17 +36,21 @@ export function RaidGame() {
 
     const currentUser = useMemo(() => getCurrentUser(params), [params]);
 
-    const conclusionTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(
-        null
-    );
+    const conclusionScheduleTimerRef =
+        useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+    const conclusionRevealTimerRef =
+        useRef<ReturnType<typeof window.setTimeout> | null>(null);
 
     const lastActiveBattleRaidIdRef = useRef<string | null>(null);
+    const lastConclusionKeyRef = useRef<string | null>(null);
 
     const [battleConclusion, setBattleConclusion] =
         useState<BattleConclusionState | null>(null);
 
     const [isCreatingRaid, setIsCreatingRaid] = useState(false);
-    const [raidActionError, setRaidActionError] = useState<string | null>(null);
+    const [raidActionError, setRaidActionError] =
+        useState<RaidActionErrorState | null>(null);
 
     const {
         raidState,
@@ -48,17 +58,22 @@ export function RaidGame() {
         players,
         currentPlayer,
         canStart,
+        bosses,
+        isBossesLoading,
+        bossesError,
         localNow,
         socketStatus,
         socketError,
         gameError,
         isJoining,
         isReadyUpdating,
+        isBossSelecting,
         isStarting,
         isInputSending,
         loadRaid,
         joinRaid,
         setReady,
+        selectBoss,
         startRaid,
         sendBattleInput
     } = useRaidLobby({
@@ -68,15 +83,28 @@ export function RaidGame() {
 
     const battle = raid?.battle ?? null;
 
+    const activeBattleConclusion =
+        raidId && battleConclusion?.raid.id === raidId ? battleConclusion : null;
+
+    const activeRaidActionError =
+        raidId && raidActionError?.raidId === raidId
+            ? raidActionError.message
+            : null;
+
     useEffect(() => {
         initTelegramWebApp();
     }, []);
 
     useEffect(() => {
         return () => {
-            if (conclusionTimerRef.current) {
-                window.clearTimeout(conclusionTimerRef.current);
-                conclusionTimerRef.current = null;
+            if (conclusionScheduleTimerRef.current) {
+                window.clearTimeout(conclusionScheduleTimerRef.current);
+                conclusionScheduleTimerRef.current = null;
+            }
+
+            if (conclusionRevealTimerRef.current) {
+                window.clearTimeout(conclusionRevealTimerRef.current);
+                conclusionRevealTimerRef.current = null;
             }
         };
     }, []);
@@ -86,13 +114,17 @@ export function RaidGame() {
             return;
         }
 
-        setBattleConclusion(null);
-        setRaidActionError(null);
         lastActiveBattleRaidIdRef.current = null;
+        lastConclusionKeyRef.current = null;
 
-        if (conclusionTimerRef.current) {
-            window.clearTimeout(conclusionTimerRef.current);
-            conclusionTimerRef.current = null;
+        if (conclusionScheduleTimerRef.current) {
+            window.clearTimeout(conclusionScheduleTimerRef.current);
+            conclusionScheduleTimerRef.current = null;
+        }
+
+        if (conclusionRevealTimerRef.current) {
+            window.clearTimeout(conclusionRevealTimerRef.current);
+            conclusionRevealTimerRef.current = null;
         }
     }, [raidId]);
 
@@ -121,48 +153,78 @@ export function RaidGame() {
         const cameFromActiveBattle = lastActiveBattleRaidIdRef.current === raid.id;
 
         if (!cameFromActiveBattle) {
-            setBattleConclusion(null);
             return;
         }
 
         const outcome = getBattleOutcome(battle);
+        const conclusionKey = `${raid.id}:${battle.endsAt}:${outcome}`;
 
-        setBattleConclusion((currentConclusion) => {
-            if (
-                currentConclusion?.raid.id === raid.id &&
-                currentConclusion.battle.endsAt === battle.endsAt &&
-                currentConclusion.outcome === outcome
-            ) {
-                return currentConclusion;
-            }
-
-            return {
-                raid,
-                battle,
-                outcome,
-                revealedAt: Date.now()
-            };
-        });
-
-        if (conclusionTimerRef.current) {
-            window.clearTimeout(conclusionTimerRef.current);
+        if (lastConclusionKeyRef.current === conclusionKey) {
+            return;
         }
 
-        conclusionTimerRef.current = window.setTimeout(() => {
+        lastConclusionKeyRef.current = conclusionKey;
+
+        if (conclusionScheduleTimerRef.current) {
+            window.clearTimeout(conclusionScheduleTimerRef.current);
+            conclusionScheduleTimerRef.current = null;
+        }
+
+        if (conclusionRevealTimerRef.current) {
+            window.clearTimeout(conclusionRevealTimerRef.current);
+            conclusionRevealTimerRef.current = null;
+        }
+
+        const conclusion: BattleConclusionState = {
+            raid,
+            battle,
+            outcome,
+            revealedAt: Date.now()
+        };
+
+        const scheduleTimerId = window.setTimeout(() => {
+            if (lastConclusionKeyRef.current !== conclusionKey) {
+                return;
+            }
+
             setBattleConclusion((currentConclusion) => {
-                if (currentConclusion?.raid.id !== raid.id) {
+                if (
+                    currentConclusion?.raid.id === raid.id &&
+                    currentConclusion.battle.endsAt === battle.endsAt &&
+                    currentConclusion.outcome === outcome
+                ) {
                     return currentConclusion;
                 }
 
-                return null;
+                return conclusion;
             });
 
-            if (lastActiveBattleRaidIdRef.current === raid.id) {
-                lastActiveBattleRaidIdRef.current = null;
+            if (conclusionScheduleTimerRef.current === scheduleTimerId) {
+                conclusionScheduleTimerRef.current = null;
             }
 
-            conclusionTimerRef.current = null;
-        }, BATTLE_CONCLUSION_REVEAL_MS);
+            const revealTimerId = window.setTimeout(() => {
+                setBattleConclusion((currentConclusion) => {
+                    if (currentConclusion?.raid.id !== raid.id) {
+                        return currentConclusion;
+                    }
+
+                    return null;
+                });
+
+                if (lastActiveBattleRaidIdRef.current === raid.id) {
+                    lastActiveBattleRaidIdRef.current = null;
+                }
+
+                if (conclusionRevealTimerRef.current === revealTimerId) {
+                    conclusionRevealTimerRef.current = null;
+                }
+            }, BATTLE_CONCLUSION_REVEAL_MS);
+
+            conclusionRevealTimerRef.current = revealTimerId;
+        }, 0);
+
+        conclusionScheduleTimerRef.current = scheduleTimerId;
     }, [raid, battle]);
 
     if (!raidId) {
@@ -173,8 +235,12 @@ export function RaidGame() {
         void loadRaid(raidId);
     };
 
-    const createFollowUpRaid = async ({ bossId }: CreateFollowUpRaidInput) => {
-        if (!raid || isCreatingRaid) {
+    const createRaidForChat = async (input: {
+        telegramChatId: string;
+        bossId: BossId;
+        errorOwnerRaidId: string;
+    }) => {
+        if (isCreatingRaid) {
             return;
         }
 
@@ -183,10 +249,10 @@ export function RaidGame() {
 
         try {
             const result = await createRaidApi({
-                telegramChatId: raid.telegramChatId,
+                telegramChatId: input.telegramChatId,
                 hostTelegramUserId: currentUser.id,
                 hostDisplayName: currentUser.displayName,
-                bossId
+                bossId: input.bossId
             });
 
             openRaid({
@@ -194,10 +260,37 @@ export function RaidGame() {
                 chatId: result.raid.telegramChatId
             });
         } catch (error) {
-            setRaidActionError(getErrorMessage(error));
+            setRaidActionError({
+                raidId: input.errorOwnerRaidId,
+                message: getErrorMessage(error)
+            });
         } finally {
             setIsCreatingRaid(false);
         }
+    };
+
+    const createFreshRaidFromExpiredLink = () => {
+        if (!chatId) {
+            return;
+        }
+
+        void createRaidForChat({
+            telegramChatId: chatId,
+            bossId: DEFAULT_BOSS_ID,
+            errorOwnerRaidId: raidId
+        });
+    };
+
+    const createFollowUpRaid = async ({ bossId }: CreateFollowUpRaidInput) => {
+        if (!raid) {
+            return;
+        }
+
+        await createRaidForChat({
+            telegramChatId: raid.telegramChatId,
+            bossId,
+            errorOwnerRaidId: raid.id
+        });
     };
 
     const retryCurrentBoss = () => {
@@ -242,10 +335,12 @@ export function RaidGame() {
                 socketStatus={socketStatus}
                 socketError={socketError}
                 gameError={gameError}
-                message={raidState.message}
+                message={activeRaidActionError ?? raidState.message}
+                isCreatingRaid={isCreatingRaid}
                 onRetry={() => {
                     void loadRaid(raidId);
                 }}
+                onCreateRaid={chatId ? createFreshRaidFromExpiredLink : undefined}
             />
         );
     }
@@ -259,23 +354,25 @@ export function RaidGame() {
                 socketStatus={socketStatus}
                 socketError={socketError}
                 gameError={gameError}
-                message="Raid state is missing."
+                message={activeRaidActionError ?? "Raid state is missing."}
+                isCreatingRaid={isCreatingRaid}
                 onRetry={() => {
                     void loadRaid(raidId);
                 }}
+                onCreateRaid={chatId ? createFreshRaidFromExpiredLink : undefined}
             />
         );
     }
 
-    if (battleConclusion) {
+    if (activeBattleConclusion) {
         return (
             <RaidBattleScreen
-                raid={battleConclusion.raid}
-                battle={battleConclusion.battle}
+                raid={activeBattleConclusion.raid}
+                battle={activeBattleConclusion.battle}
                 raidId={raidId}
                 chatId={chatId}
                 currentUser={currentUser}
-                players={Object.values(battleConclusion.raid.players)}
+                players={Object.values(activeBattleConclusion.raid.players)}
                 localNow={localNow}
                 socketStatus={socketStatus}
                 socketError={socketError}
@@ -301,7 +398,7 @@ export function RaidGame() {
                 socketError={socketError}
                 gameError={gameError}
                 isCreatingRaid={isCreatingRaid}
-                raidActionError={raidActionError}
+                raidActionError={activeRaidActionError}
                 onRefresh={refreshRaid}
                 onRetryBoss={retryCurrentBoss}
                 onCreateNewRaid={createNewRaid}
@@ -338,16 +435,21 @@ export function RaidGame() {
             players={players}
             currentPlayer={currentPlayer}
             canStart={canStart}
+            bosses={bosses}
+            isBossesLoading={isBossesLoading}
+            bossesError={bossesError}
             localNow={localNow}
             socketStatus={socketStatus}
             socketError={socketError}
             gameError={gameError}
             isJoining={isJoining}
             isReadyUpdating={isReadyUpdating}
+            isBossSelecting={isBossSelecting}
             isStarting={isStarting}
             onRefresh={refreshRaid}
             onJoin={joinRaid}
             onReadyChange={setReady}
+            onSelectBoss={selectBoss}
             onStart={startRaid}
         />
     );

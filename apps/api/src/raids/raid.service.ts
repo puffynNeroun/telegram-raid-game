@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { DEFAULT_BOSS_ID, getBossConfig } from "./boss.config.js";
+import { DEFAULT_BOSS_ID, getBossConfig, isBossId } from "./boss.config.js";
 import type {
     BattleAttackInput,
     BattleAttackResult,
@@ -24,6 +24,8 @@ import type {
     ResolveMissedNotesResult,
     SetReadyInput,
     SetReadyResult,
+    SelectRaidBossInput,
+    SelectRaidBossResult,
     StartRaidInput,
     StartRaidResult
 } from "./raid.types.js";
@@ -226,6 +228,66 @@ export class RaidService {
             ok: true,
             raid: updatedRaid,
             player: updatedPlayer
+        };
+    }
+
+
+    async selectRaidBoss(
+        input: SelectRaidBossInput
+    ): Promise<SelectRaidBossResult> {
+        const raid = await this.raidRepository.getRaid(input.raidId);
+
+        if (!raid) {
+            return {
+                ok: false,
+                reason: "raid_not_found"
+            };
+        }
+
+        const lobbyValidationError = this.validateLobbyRaid(raid);
+
+        if (lobbyValidationError) {
+            return {
+                ok: false,
+                reason: lobbyValidationError
+            };
+        }
+
+        const player = raid.players[input.telegramUserId];
+
+        if (!player) {
+            return {
+                ok: false,
+                reason: "player_not_in_raid"
+            };
+        }
+
+        if (!player.isHost) {
+            return {
+                ok: false,
+                reason: "only_host_can_select_boss"
+            };
+        }
+
+        if (!isBossId(input.bossId)) {
+            return {
+                ok: false,
+                reason: "invalid_boss_id"
+            };
+        }
+
+        const bossConfig = getBossConfig(input.bossId);
+        const updatedRaid: Raid = {
+            ...raid,
+            bossId: bossConfig.id,
+            players: resetReadyState(raid.players)
+        };
+
+        await this.raidRepository.saveRaid(updatedRaid);
+
+        return {
+            ok: true,
+            raid: updatedRaid
         };
     }
 
@@ -720,6 +782,21 @@ export class RaidService {
             raid.battle?.status === "active"
         );
     }
+}
+
+
+function resetReadyState(
+    players: Record<string, RaidPlayer>
+): Record<string, RaidPlayer> {
+    return Object.fromEntries(
+        Object.entries(players).map(([telegramUserId, player]) => [
+            telegramUserId,
+            {
+                ...player,
+                isReady: false
+            } satisfies RaidPlayer
+        ])
+    );
 }
 
 function createBattlePlayers(input: {

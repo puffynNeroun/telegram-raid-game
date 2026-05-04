@@ -102,6 +102,16 @@ export type BossConfig = {
     scoring: BossScoringConfig;
 };
 
+export type BossCatalogItem = {
+    id: BossId;
+    level: number;
+    name: string;
+    subtitle: string;
+    assetSlug: string;
+    durationSeconds: number;
+    baseHp: number;
+};
+
 export type RaidPlayer = {
     telegramUserId: string;
     displayName: string;
@@ -248,6 +258,28 @@ export type SetReadyResult =
         | "raid_expired"
         | "raid_not_joinable"
         | "player_not_in_raid";
+};
+
+export type SelectRaidBossInput = {
+    raidId: string;
+    telegramUserId: string;
+    bossId: BossId;
+};
+
+export type SelectRaidBossResult =
+    | {
+    ok: true;
+    raid: Raid;
+}
+    | {
+    ok: false;
+    reason:
+        | "raid_not_found"
+        | "raid_expired"
+        | "raid_not_joinable"
+        | "player_not_in_raid"
+        | "only_host_can_select_boss"
+        | "invalid_boss_id";
 };
 
 export type StartRaidInput = {

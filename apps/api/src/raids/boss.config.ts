@@ -1,4 +1,4 @@
-import type { BossConfig, BossId } from "./raid.types.js";
+import type { BossCatalogItem, BossConfig, BossId } from "./raid.types.js";
 
 export const BOSS_CONFIGS: Record<BossId, BossConfig> = {
     "boss-001": {
@@ -273,7 +273,7 @@ export const BOSS_CONFIGS: Record<BossId, BossConfig> = {
         },
 
         note: {
-            introCountdownMs: 1000,
+            introCountdownMs: 1800,
             firstHitDelayMs: 1300,
             intervalMs: 740,
             visibleAheadMs: 2700,
@@ -305,10 +305,38 @@ export const BOSS_CONFIGS: Record<BossId, BossConfig> = {
 
 export const DEFAULT_BOSS_ID: BossId = "boss-001";
 
-export function getBossConfig(bossId: BossId | string | null | undefined): BossConfig {
-    if (bossId && bossId in BOSS_CONFIGS) {
-        return BOSS_CONFIGS[bossId as BossId];
+export const BOSS_IDS = Object.keys(BOSS_CONFIGS) as BossId[];
+
+export function getBossConfig(
+    bossId: BossId | string | null | undefined
+): BossConfig {
+    if (bossId && isBossId(bossId)) {
+        return BOSS_CONFIGS[bossId];
     }
 
     return BOSS_CONFIGS[DEFAULT_BOSS_ID];
+}
+
+export function getBossConfigs(): BossConfig[] {
+    return Object.values(BOSS_CONFIGS).sort((firstBoss, secondBoss) => {
+        return firstBoss.level - secondBoss.level;
+    });
+}
+
+export function getBossCatalog(): BossCatalogItem[] {
+    return getBossConfigs().map((bossConfig) => {
+        return {
+            id: bossConfig.id,
+            level: bossConfig.level,
+            name: bossConfig.name,
+            subtitle: bossConfig.subtitle,
+            assetSlug: bossConfig.assetSlug,
+            durationSeconds: bossConfig.durationSeconds,
+            baseHp: bossConfig.baseHp
+        };
+    });
+}
+
+export function isBossId(value: string): value is BossId {
+    return value in BOSS_CONFIGS;
 }
