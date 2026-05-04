@@ -116,6 +116,10 @@ export class RaidService {
         return this.raidRepository.getRaid(raidId);
     }
 
+    async markRaidResultNotificationPending(raidId: string): Promise<boolean> {
+        return this.raidRepository.markRaidResultNotificationPending(raidId);
+    }
+
     async joinRaid(input: JoinRaidInput): Promise<JoinRaidResult> {
         const raid = await this.raidRepository.getRaid(input.raidId);
 

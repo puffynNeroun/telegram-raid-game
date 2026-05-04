@@ -2,9 +2,9 @@ import { createServer } from "node:http";
 import { Redis } from "ioredis";
 import { env } from "./config/env.js";
 import { createApp } from "./app.js";
+import { startTelegramBot, type TelegramBotRuntime } from "./bot/bot.js";
 import { RaidRepository } from "./raids/raid.repository.js";
 import { RaidService } from "./raids/raid.service.js";
-import { startTelegramBot, type TelegramBotRuntime } from "./bot/bot.js";
 import { setupSocketServer } from "./socket/socket.js";
 
 const redis = new Redis(env.redisUrl, {
@@ -23,14 +23,20 @@ redis.on("error", (error: Error) => {
 const raidRepository = new RaidRepository(redis);
 const raidService = new RaidService(raidRepository);
 
-const app = createApp({ redis, raidService });
-const httpServer = createServer(app);
-const socketServer = setupSocketServer({
-    httpServer,
+const app = createApp({
+    redis,
     raidService
 });
 
+const httpServer = createServer(app);
+
 let telegramBot: TelegramBotRuntime | null = null;
+
+const socketServer = setupSocketServer({
+    httpServer,
+    raidService,
+    getTelegramBot: () => telegramBot
+});
 
 httpServer.listen(env.apiPort, () => {
     console.log(`[api] running on http://localhost:${env.apiPort}`);
@@ -76,5 +82,10 @@ function shutdown(signal: string) {
     }, 5000).unref();
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => {
+    shutdown("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+    shutdown("SIGTERM");
+});

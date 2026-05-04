@@ -1,6 +1,8 @@
 import type { Redis } from "ioredis";
 import type { Raid } from "./raid.types.js";
 
+const RAID_RESULT_NOTIFICATION_TTL_SECONDS = 60 * 60;
+
 export class RaidRepository {
     constructor(private readonly redis: Redis) {}
 
@@ -88,6 +90,18 @@ export class RaidRepository {
         });
     }
 
+    async markRaidResultNotificationPending(raidId: string): Promise<boolean> {
+        const created = await this.redis.set(
+            this.raidResultNotificationKey(raidId),
+            String(Date.now()),
+            "EX",
+            RAID_RESULT_NOTIFICATION_TTL_SECONDS,
+            "NX"
+        );
+
+        return created === "OK";
+    }
+
     private async reserveActiveRaid(raid: Raid): Promise<boolean> {
         const created = await this.redis.set(
             this.activeRaidByChatKey(raid.telegramChatId),
@@ -140,6 +154,10 @@ export class RaidRepository {
 
     private activeRaidByChatKey(telegramChatId: string): string {
         return `active_raid_by_chat:${telegramChatId}`;
+    }
+
+    private raidResultNotificationKey(raidId: string): string {
+        return `raid_result_notification:${raidId}`;
     }
 
     private parseRaid(rawRaid: string | null): Raid | null {

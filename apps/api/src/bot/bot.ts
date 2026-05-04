@@ -1,6 +1,8 @@
-import { Telegraf } from "telegraf";
+import { Markup, Telegraf } from "telegraf";
 import type { RaidService } from "../raids/raid.service.js";
+import type { Raid } from "../raids/raid.types.js";
 import { registerRaidCommand } from "./raid-command.js";
+import { buildRaidResultMessage } from "./raid-result-message.js";
 
 type StartTelegramBotOptions = {
     token: string;
@@ -10,6 +12,7 @@ type StartTelegramBotOptions = {
 
 export type TelegramBotRuntime = {
     stop: (reason?: string) => void;
+    sendRaidResult: (raid: Raid) => Promise<void>;
 };
 
 export async function startTelegramBot({
@@ -90,6 +93,76 @@ export async function startTelegramBot({
     return {
         stop: (reason = "shutdown") => {
             bot.stop(reason);
+        },
+
+        sendRaidResult: async (raid: Raid) => {
+            try {
+                const resultMessage = buildRaidResultMessage({
+                    raid,
+                    webAppUrl
+                });
+
+                if (canUseTelegramButton(resultMessage.resultUrl)) {
+                    await bot.telegram.sendMessage(
+                        raid.telegramChatId,
+                        resultMessage.text,
+                        Markup.inlineKeyboard([
+                            Markup.button.url(
+                                resultMessage.buttonText,
+                                resultMessage.resultUrl
+                            )
+                        ])
+                    );
+
+                    console.log("[bot] raid result sent:", {
+                        raidId: raid.id,
+                        chatId: raid.telegramChatId
+                    });
+
+                    return;
+                }
+
+                await bot.telegram.sendMessage(
+                    raid.telegramChatId,
+                    [
+                        resultMessage.text,
+                        "",
+                        "Local dev link:",
+                        resultMessage.resultUrl,
+                        "",
+                        "Telegram cannot use localhost inside an inline button. Open this link manually in your browser."
+                    ].join("\n")
+                );
+
+                console.log("[bot] raid result sent with local link:", {
+                    raidId: raid.id,
+                    chatId: raid.telegramChatId
+                });
+            } catch (error) {
+                console.error("[bot] failed to send raid result:", {
+                    raidId: raid.id,
+                    chatId: raid.telegramChatId,
+                    error
+                });
+            }
         }
     };
+}
+
+function canUseTelegramButton(url: string): boolean {
+    try {
+        const parsedUrl = new URL(url);
+
+        if (parsedUrl.hostname === "localhost") {
+            return false;
+        }
+
+        if (parsedUrl.hostname === "127.0.0.1") {
+            return false;
+        }
+
+        return parsedUrl.protocol === "https:";
+    } catch {
+        return false;
+    }
 }

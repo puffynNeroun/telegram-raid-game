@@ -1,9 +1,10 @@
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import type { Socket } from "socket.io";
+import type { TelegramBotRuntime } from "../bot/bot.js";
+import { isBossId } from "../raids/boss.config.js";
 import type { RaidService } from "../raids/raid.service.js";
 import type { BattleInputKey, Raid } from "../raids/raid.types.js";
-import { isBossId } from "../raids/boss.config.js";
 import type {
     BattleAttackPayload,
     BattleInputPayload,
@@ -20,6 +21,7 @@ import type {
 type SetupSocketServerOptions = {
     httpServer: HttpServer;
     raidService: RaidService;
+    getTelegramBot?: () => TelegramBotRuntime | null;
 };
 
 type RaidSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -28,11 +30,18 @@ type RaidSocketServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type BattleFinalizationTimers = Map<string, ReturnType<typeof setTimeout>>;
 type MissedNotesResolutionTimers = Map<string, ReturnType<typeof setInterval>>;
 
+type RaidResultNotificationOptions = {
+    raid: Raid;
+    raidService: RaidService;
+    getTelegramBot: () => TelegramBotRuntime | null;
+};
+
 const MISSED_NOTES_RESOLUTION_INTERVAL_MS = 250;
 
 export function setupSocketServer({
                                       httpServer,
-                                      raidService
+                                      raidService,
+                                      getTelegramBot = () => null
                                   }: SetupSocketServerOptions): RaidSocketServer {
     const battleFinalizationTimers: BattleFinalizationTimers = new Map();
     const missedNotesResolutionTimers: MissedNotesResolutionTimers = new Map();
@@ -81,7 +90,8 @@ export function setupSocketServer({
                     raidService,
                     raid,
                     finalizationTimers: battleFinalizationTimers,
-                    missedNotesTimers: missedNotesResolutionTimers
+                    missedNotesTimers: missedNotesResolutionTimers,
+                    getTelegramBot
                 });
 
                 if (!result.finalized) {
@@ -209,7 +219,8 @@ export function setupSocketServer({
                     raidService,
                     raid: result.raid,
                     finalizationTimers: battleFinalizationTimers,
-                    missedNotesTimers: missedNotesResolutionTimers
+                    missedNotesTimers: missedNotesResolutionTimers,
+                    getTelegramBot
                 });
 
                 scheduleMissedNotesResolution({
@@ -217,7 +228,8 @@ export function setupSocketServer({
                     raidService,
                     raid: result.raid,
                     finalizationTimers: battleFinalizationTimers,
-                    missedNotesTimers: missedNotesResolutionTimers
+                    missedNotesTimers: missedNotesResolutionTimers,
+                    getTelegramBot
                 });
             } catch (error) {
                 emitInternalSocketError(socket, error);
@@ -246,7 +258,8 @@ export function setupSocketServer({
                         raidId: parsedPayload.raidId,
                         reason: result.reason,
                         finalizationTimers: battleFinalizationTimers,
-                        missedNotesTimers: missedNotesResolutionTimers
+                        missedNotesTimers: missedNotesResolutionTimers,
+                        getTelegramBot
                     });
 
                     if (handled) {
@@ -262,9 +275,11 @@ export function setupSocketServer({
 
                 handleSuccessfulBattleAction({
                     io,
+                    raidService,
                     raid: result.raid,
                     finalizationTimers: battleFinalizationTimers,
-                    missedNotesTimers: missedNotesResolutionTimers
+                    missedNotesTimers: missedNotesResolutionTimers,
+                    getTelegramBot
                 });
             } catch (error) {
                 emitInternalSocketError(socket, error);
@@ -293,7 +308,8 @@ export function setupSocketServer({
                         raidId: parsedPayload.raidId,
                         reason: result.reason,
                         finalizationTimers: battleFinalizationTimers,
-                        missedNotesTimers: missedNotesResolutionTimers
+                        missedNotesTimers: missedNotesResolutionTimers,
+                        getTelegramBot
                     });
 
                     if (handled) {
@@ -309,9 +325,11 @@ export function setupSocketServer({
 
                 handleSuccessfulBattleAction({
                     io,
+                    raidService,
                     raid: result.raid,
                     finalizationTimers: battleFinalizationTimers,
-                    missedNotesTimers: missedNotesResolutionTimers
+                    missedNotesTimers: missedNotesResolutionTimers,
+                    getTelegramBot
                 });
             } catch (error) {
                 emitInternalSocketError(socket, error);
@@ -362,16 +380,59 @@ function emitInternalSocketError(socket: RaidSocket, error: unknown): void {
     });
 }
 
+async function notifyRaidResultOnce({
+                                        raid,
+                                        raidService,
+                                        getTelegramBot
+                                    }: RaidResultNotificationOptions): Promise<void> {
+    if (!isFinishedRaid(raid)) {
+        return;
+    }
+
+    const telegramBot = getTelegramBot();
+
+    if (!telegramBot) {
+        console.log("[socket] raid result notification skipped: bot unavailable", {
+            raidId: raid.id
+        });
+        return;
+    }
+
+    try {
+        const shouldNotify = await raidService.markRaidResultNotificationPending(
+            raid.id
+        );
+
+        if (!shouldNotify) {
+            console.log("[socket] raid result notification skipped: already sent", {
+                raidId: raid.id
+            });
+            return;
+        }
+
+        await telegramBot.sendRaidResult(raid);
+    } catch (error) {
+        console.error("[socket] raid result notification failed:", {
+            raidId: raid.id,
+            error
+        });
+    }
+}
+
 function handleSuccessfulBattleAction({
                                           io,
+                                          raidService,
                                           raid,
                                           finalizationTimers,
-                                          missedNotesTimers
+                                          missedNotesTimers,
+                                          getTelegramBot
                                       }: {
     io: RaidSocketServer;
+    raidService: RaidService;
     raid: Raid;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): void {
     if (raid.status === "finished") {
         clearRaidBattleTimers({
@@ -382,6 +443,12 @@ function handleSuccessfulBattleAction({
     }
 
     emitRaidStateToRoom(io, raid);
+
+    void notifyRaidResultOnce({
+        raid,
+        raidService,
+        getTelegramBot
+    });
 }
 
 async function handleFailedBattleAction({
@@ -391,7 +458,8 @@ async function handleFailedBattleAction({
                                             raidId,
                                             reason,
                                             finalizationTimers,
-                                            missedNotesTimers
+                                            missedNotesTimers,
+                                            getTelegramBot
                                         }: {
     io: RaidSocketServer;
     socket: RaidSocket;
@@ -400,6 +468,7 @@ async function handleFailedBattleAction({
     reason: string;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): Promise<boolean> {
     if (reason === "battle_expired") {
         return finalizeBattleIfExpired({
@@ -407,7 +476,8 @@ async function handleFailedBattleAction({
             raidService,
             raidId,
             finalizationTimers,
-            missedNotesTimers
+            missedNotesTimers,
+            getTelegramBot
         });
     }
 
@@ -418,7 +488,8 @@ async function handleFailedBattleAction({
             raidService,
             raidId,
             finalizationTimers,
-            missedNotesTimers
+            missedNotesTimers,
+            getTelegramBot
         });
 
         if (emitted) {
@@ -434,13 +505,15 @@ async function finalizeBattleIfExpired({
                                            raidService,
                                            raidId,
                                            finalizationTimers,
-                                           missedNotesTimers
+                                           missedNotesTimers,
+                                           getTelegramBot
                                        }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raidId: string;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): Promise<boolean> {
     const finalizeResult = await raidService.finalizeExpiredBattle(raidId);
 
@@ -456,6 +529,12 @@ async function finalizeBattleIfExpired({
 
     emitRaidStateToRoom(io, finalizeResult.raid);
 
+    void notifyRaidResultOnce({
+        raid: finalizeResult.raid,
+        raidService,
+        getTelegramBot
+    });
+
     return true;
 }
 
@@ -465,7 +544,8 @@ async function emitCurrentRaidStateIfFinished({
                                                   raidService,
                                                   raidId,
                                                   finalizationTimers,
-                                                  missedNotesTimers
+                                                  missedNotesTimers,
+                                                  getTelegramBot
                                               }: {
     io: RaidSocketServer;
     socket: RaidSocket;
@@ -473,6 +553,7 @@ async function emitCurrentRaidStateIfFinished({
     raidId: string;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): Promise<boolean> {
     const raid = await raidService.getRaid(raidId);
 
@@ -493,6 +574,12 @@ async function emitCurrentRaidStateIfFinished({
 
     emitRaidStateToRoom(io, raid);
 
+    void notifyRaidResultOnce({
+        raid,
+        raidService,
+        getTelegramBot
+    });
+
     return true;
 }
 
@@ -501,13 +588,15 @@ async function finalizeExpiredBattleIfNeeded({
                                                  raidService,
                                                  raid,
                                                  finalizationTimers,
-                                                 missedNotesTimers
+                                                 missedNotesTimers,
+                                                 getTelegramBot
                                              }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raid: Raid;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): Promise<{ raid: Raid; finalized: boolean }> {
     if (!isActiveBattleRaid(raid)) {
         clearRaidBattleTimers({
@@ -528,7 +617,8 @@ async function finalizeExpiredBattleIfNeeded({
             raidService,
             raid,
             finalizationTimers,
-            missedNotesTimers
+            missedNotesTimers,
+            getTelegramBot
         });
 
         scheduleMissedNotesResolution({
@@ -536,7 +626,8 @@ async function finalizeExpiredBattleIfNeeded({
             raidService,
             raid,
             finalizationTimers,
-            missedNotesTimers
+            missedNotesTimers,
+            getTelegramBot
         });
 
         return {
@@ -562,6 +653,12 @@ async function finalizeExpiredBattleIfNeeded({
 
     emitRaidStateToRoom(io, result.raid);
 
+    void notifyRaidResultOnce({
+        raid: result.raid,
+        raidService,
+        getTelegramBot
+    });
+
     return {
         raid: result.raid,
         finalized: result.finalized
@@ -573,13 +670,15 @@ function scheduleBattleFinalization({
                                         raidService,
                                         raid,
                                         finalizationTimers,
-                                        missedNotesTimers
+                                        missedNotesTimers,
+                                        getTelegramBot
                                     }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raid: Raid;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): void {
     if (!isActiveBattleRaid(raid)) {
         clearBattleFinalizationTimer(finalizationTimers, raid.id);
@@ -596,7 +695,8 @@ function scheduleBattleFinalization({
             raidService,
             raidId: raid.id,
             finalizationTimers,
-            missedNotesTimers
+            missedNotesTimers,
+            getTelegramBot
         });
     }, delayMs + 50);
 
@@ -613,13 +713,15 @@ function scheduleMissedNotesResolution({
                                            raidService,
                                            raid,
                                            finalizationTimers,
-                                           missedNotesTimers
+                                           missedNotesTimers,
+                                           getTelegramBot
                                        }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raid: Raid;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): void {
     if (!isActiveBattleRaid(raid)) {
         clearMissedNotesResolutionTimer(missedNotesTimers, raid.id);
@@ -634,7 +736,8 @@ function scheduleMissedNotesResolution({
             raidService,
             raidId: raid.id,
             finalizationTimers,
-            missedNotesTimers
+            missedNotesTimers,
+            getTelegramBot
         });
     }, MISSED_NOTES_RESOLUTION_INTERVAL_MS);
 
@@ -651,13 +754,15 @@ async function finalizeBattleByTimer({
                                          raidService,
                                          raidId,
                                          finalizationTimers,
-                                         missedNotesTimers
+                                         missedNotesTimers,
+                                         getTelegramBot
                                      }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raidId: string;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): Promise<void> {
     const result = await raidService.finalizeExpiredBattle(raidId);
 
@@ -674,6 +779,12 @@ async function finalizeBattleByTimer({
             });
 
             emitRaidStateToRoom(io, result.raid);
+
+            void notifyRaidResultOnce({
+                raid: result.raid,
+                raidService,
+                getTelegramBot
+            });
         }
 
         return;
@@ -688,7 +799,8 @@ async function finalizeBattleByTimer({
                 raidService,
                 raid,
                 finalizationTimers,
-                missedNotesTimers
+                missedNotesTimers,
+                getTelegramBot
             });
 
             scheduleMissedNotesResolution({
@@ -696,7 +808,8 @@ async function finalizeBattleByTimer({
                 raidService,
                 raid,
                 finalizationTimers,
-                missedNotesTimers
+                missedNotesTimers,
+                getTelegramBot
             });
         }
 
@@ -720,13 +833,15 @@ async function resolveMissedNotesByTimer({
                                              raidService,
                                              raidId,
                                              finalizationTimers,
-                                             missedNotesTimers
+                                             missedNotesTimers,
+                                             getTelegramBot
                                          }: {
     io: RaidSocketServer;
     raidService: RaidService;
     raidId: string;
     finalizationTimers: BattleFinalizationTimers;
     missedNotesTimers: MissedNotesResolutionTimers;
+    getTelegramBot: () => TelegramBotRuntime | null;
 }): Promise<void> {
     const result = await raidService.resolveMissedNotes({
         raidId
@@ -748,6 +863,12 @@ async function resolveMissedNotesByTimer({
 
         if (raid?.status === "finished") {
             emitRaidStateToRoom(io, raid);
+
+            void notifyRaidResultOnce({
+                raid,
+                raidService,
+                getTelegramBot
+            });
         }
 
         return;
@@ -761,6 +882,13 @@ async function resolveMissedNotesByTimer({
         });
 
         emitRaidStateToRoom(io, result.raid);
+
+        void notifyRaidResultOnce({
+            raid: result.raid,
+            raidService,
+            getTelegramBot
+        });
+
         return;
     }
 
@@ -817,6 +945,16 @@ function isActiveBattleRaid(
         raid.status === "battle" &&
         Boolean(raid.battle) &&
         raid.battle?.status === "active"
+    );
+}
+
+function isFinishedRaid(
+    raid: Raid
+): raid is Raid & { battle: NonNullable<Raid["battle"]> } {
+    return (
+        raid.status === "finished" &&
+        Boolean(raid.battle) &&
+        raid.battle?.status === "finished"
     );
 }
 
