@@ -91,6 +91,11 @@ export type BeatdownPlayerState = {
     telegramUserId: string;
     displayName: string;
 
+    stamina: number;
+    staminaMax: number;
+    staminaRegenPerSecond: number;
+    lastStaminaUpdatedAt: number;
+
     kickCharge: number;
     kickChargeMax: number;
 

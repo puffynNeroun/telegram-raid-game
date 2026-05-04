@@ -97,6 +97,10 @@ export function RaidBeatdownScreen({
     const kickChargePercent = getPercent(kickCharge, kickChargeMax);
     const isKickReady = kickChargePercent >= 100;
 
+    const stamina = getPredictedStamina(currentBeatdownPlayer, localNow);
+    const staminaMax = currentBeatdownPlayer?.staminaMax ?? 100;
+    const staminaPercent = getPercent(stamina, staminaMax);
+
     const isCurrentPlayerDefeated = Boolean(
         currentBattlePlayer && currentBattlePlayer.hp <= 0
     );
@@ -109,6 +113,24 @@ export function RaidBeatdownScreen({
         currentBattlePlayer &&
         currentBeatdownPlayer &&
         !isCurrentPlayerDefeated
+    );
+
+    const canLeftPunch = Boolean(
+        canHit &&
+        stamina >= 8 &&
+        currentBeatdownPlayer?.lastHitType !== "left"
+    );
+
+    const canRightPunch = Boolean(
+        canHit &&
+        stamina >= 8 &&
+        currentBeatdownPlayer?.lastHitType !== "right"
+    );
+
+    const canKick = Boolean(canHit && isKickReady && stamina >= 30);
+
+    const nextPunchHint = getNextPunchHint(
+        currentBeatdownPlayer?.lastHitType ?? null
     );
 
     const stageClassName = [
@@ -128,7 +150,7 @@ export function RaidBeatdownScreen({
         }
 
         if (hitType === "kick" && !isKickReady) {
-            triggerHitFx("kick");
+            triggerHitFx();
             return;
         }
 
@@ -163,7 +185,8 @@ export function RaidBeatdownScreen({
                 style={
                     {
                         "--raid-arena-image": `url('/raid/${bossAssetSlug}/arena.png')`,
-                        "--kick-charge": `${kickChargePercent}%`
+                        "--kick-charge": `${kickChargePercent}%`,
+                        "--stamina": `${staminaPercent}%`
                     } as CSSProperties
                 }
             >
@@ -242,6 +265,10 @@ export function RaidBeatdownScreen({
                         <div className="raid-beatdown-stat-card">
                             <span>Kick</span>
                             <strong>{Math.round(kickChargePercent)}%</strong>
+                        </div>
+                        <div className="raid-beatdown-stat-card">
+                            <span>Stamina</span>
+                            <strong>{Math.round(staminaPercent)}%</strong>
                         </div>
                     </aside>
 
@@ -323,11 +350,29 @@ export function RaidBeatdownScreen({
                         </div>
                     </div>
 
+                    <div className="raid-beatdown-stamina-panel">
+                        <div className="raid-beatdown-stamina-header">
+                            <span>Stamina</span>
+                            <strong>{Math.round(staminaPercent)}%</strong>
+                        </div>
+
+                        <div className="raid-beatdown-stamina-bar">
+                            <div
+                                className="raid-beatdown-stamina-fill"
+                                style={{ width: `${staminaPercent}%` }}
+                            />
+                        </div>
+
+                        <div className="raid-beatdown-combo-hint">
+                            {nextPunchHint}
+                        </div>
+                    </div>
+
                     <div className="raid-beatdown-controls">
                         <button
                             className="raid-beatdown-action is-left"
                             type="button"
-                            disabled={!canHit || isInputSending}
+                            disabled={!canLeftPunch || isInputSending}
                             onClick={() => handleHit("left")}
                         >
                             <span>Left</span>
@@ -339,7 +384,7 @@ export function RaidBeatdownScreen({
                                 isKickReady ? "is-ready" : ""
                             }`}
                             type="button"
-                            disabled={!canHit || isInputSending || !isKickReady}
+                            disabled={!canKick || isInputSending}
                             onClick={() => handleHit("kick")}
                         >
                             <span>{isKickReady ? "Kick" : "Charge"}</span>
@@ -349,7 +394,7 @@ export function RaidBeatdownScreen({
                         <button
                             className="raid-beatdown-action is-right"
                             type="button"
-                            disabled={!canHit || isInputSending}
+                            disabled={!canRightPunch || isInputSending}
                             onClick={() => handleHit("right")}
                         >
                             <span>Right</span>
@@ -362,7 +407,7 @@ export function RaidBeatdownScreen({
     );
 }
 
-function triggerHitFx(_hitType: BeatdownHitType): void {
+function triggerHitFx(): void {
     if (navigator.vibrate) {
         navigator.vibrate(35);
     }
@@ -407,8 +452,7 @@ function getBossStage(input: {
 
     return {
         key: "100",
-        label: input.subtitle || "Fresh"
-        ,
+        label: input.subtitle || "Fresh",
         src: `${basePath}/boss-100.png`
     };
 }
@@ -475,4 +519,38 @@ function getPercent(value: number, maxValue: number): number {
     }
 
     return Math.max(0, Math.min(100, (value / maxValue) * 100));
+}
+
+function getPredictedStamina(
+    player: { stamina: number; staminaMax: number; staminaRegenPerSecond: number; lastStaminaUpdatedAt: number } | null,
+    localNow: number
+): number {
+    if (!player) {
+        return 0;
+    }
+
+    if (localNow <= 0) {
+        return player.stamina;
+    }
+
+    const elapsedMs = Math.max(0, localNow - player.lastStaminaUpdatedAt);
+    const regenerated = player.stamina + (elapsedMs / 1000) * player.staminaRegenPerSecond;
+
+    return Math.min(player.staminaMax, regenerated);
+}
+
+function getNextPunchHint(lastHitType: BeatdownHitType | null): string {
+    if (lastHitType === "left") {
+        return "Next clean punch: RIGHT";
+    }
+
+    if (lastHitType === "right") {
+        return "Next clean punch: LEFT";
+    }
+
+    if (lastHitType === "kick") {
+        return "Kick landed. Start a new combo.";
+    }
+
+    return "Alternate hands to keep pressure.";
 }

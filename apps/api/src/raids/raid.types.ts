@@ -178,6 +178,11 @@ export type BeatdownPlayerState = {
     telegramUserId: string;
     displayName: string;
 
+    stamina: number;
+    staminaMax: number;
+    staminaRegenPerSecond: number;
+    lastStaminaUpdatedAt: number;
+
     kickCharge: number;
     kickChargeMax: number;
 
@@ -405,6 +410,8 @@ export type BeatdownHitResult =
     combo: number;
     kickCharge: number;
     kickChargeMax: number;
+    stamina: number;
+    staminaMax: number;
 }
     | {
     ok: false;
@@ -417,6 +424,8 @@ export type BeatdownHitResult =
         | "player_not_in_battle"
         | "player_defeated"
         | "kick_not_charged"
+        | "not_enough_stamina"
+        | "repeated_punch"
         | "hit_on_cooldown"
         | "invalid_beatdown_hit_type";
 };

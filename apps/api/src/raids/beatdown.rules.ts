@@ -21,6 +21,8 @@ export type ApplyBeatdownHitRuleResult =
     combo: number;
     kickCharge: number;
     kickChargeMax: number;
+    stamina: number;
+    staminaMax: number;
 }
     | {
     ok: false;
@@ -30,16 +32,24 @@ export type ApplyBeatdownHitRuleResult =
         | "player_not_in_battle"
         | "player_defeated"
         | "kick_not_charged"
+        | "not_enough_stamina"
+        | "repeated_punch"
         | "hit_on_cooldown";
 };
 
-const PUNCH_DAMAGE = 14;
-const PUNCH_KICK_CHARGE_GAIN = 16;
-const PUNCH_COOLDOWN_MS = 120;
+const PUNCH_DAMAGE = 12;
+const PUNCH_KICK_CHARGE_GAIN = 12;
+const PUNCH_STAMINA_COST = 8;
+const PUNCH_COOLDOWN_MS = 105;
 
-const KICK_DAMAGE = 90;
+const KICK_DAMAGE = 85;
 const KICK_REQUIRED_CHARGE = 100;
+const KICK_STAMINA_COST = 30;
 const KICK_COOLDOWN_MS = 650;
+
+export const BEATDOWN_STAMINA_MAX = 100;
+export const BEATDOWN_STAMINA_REGEN_PER_SECOND = 28;
+export const BEATDOWN_KICK_CHARGE_MAX = 100;
 
 export function applyBeatdownHitToBattle(
     input: ApplyBeatdownHitRuleInput
@@ -75,17 +85,38 @@ export function applyBeatdownHitToBattle(
         };
     }
 
-    if (isHitOnCooldown({ player: beatdownPlayer, hitType: input.hitType, now: input.now })) {
+    const restedBeatdownPlayer = regenerateStamina({
+        player: beatdownPlayer,
+        now: input.now
+    });
+
+    if (isHitOnCooldown({ player: restedBeatdownPlayer, hitType: input.hitType, now: input.now })) {
         return {
             ok: false,
             reason: "hit_on_cooldown"
         };
     }
 
-    if (input.hitType === "kick" && beatdownPlayer.kickCharge < KICK_REQUIRED_CHARGE) {
+    if (isRepeatedPunch({ player: restedBeatdownPlayer, hitType: input.hitType })) {
+        return {
+            ok: false,
+            reason: "repeated_punch"
+        };
+    }
+
+    if (input.hitType === "kick" && restedBeatdownPlayer.kickCharge < KICK_REQUIRED_CHARGE) {
         return {
             ok: false,
             reason: "kick_not_charged"
+        };
+    }
+
+    const staminaCost = getStaminaCostByHitType(input.hitType);
+
+    if (restedBeatdownPlayer.stamina < staminaCost) {
+        return {
+            ok: false,
+            reason: "not_enough_stamina"
         };
     }
 
@@ -97,16 +128,16 @@ export function applyBeatdownHitToBattle(
 
     const updatedBattlePlayer = updateBattlePlayerAfterBeatdownHit({
         player: battlePlayer,
-        hitType: input.hitType,
         hitAt: input.now,
         damageDealt: damageResult.damageDealt
     });
 
     const updatedBeatdownPlayer = updateBeatdownPlayerAfterHit({
-        player: beatdownPlayer,
+        player: restedBeatdownPlayer,
         hitType: input.hitType,
         hitAt: input.now,
-        damageDealt: damageResult.damageDealt
+        damageDealt: damageResult.damageDealt,
+        staminaCost
     });
 
     const battleWithPlayer: BattleState = {
@@ -130,8 +161,39 @@ export function applyBeatdownHitToBattle(
         damageDealt: damageResult.damageDealt,
         combo: updatedBattlePlayer.combo,
         kickCharge: updatedBeatdownPlayer.kickCharge,
-        kickChargeMax: updatedBeatdownPlayer.kickChargeMax
+        kickChargeMax: updatedBeatdownPlayer.kickChargeMax,
+        stamina: updatedBeatdownPlayer.stamina,
+        staminaMax: updatedBeatdownPlayer.staminaMax
     };
+}
+
+function regenerateStamina(input: {
+    player: BeatdownPlayerState;
+    now: number;
+}): BeatdownPlayerState {
+    const elapsedMs = Math.max(0, input.now - input.player.lastStaminaUpdatedAt);
+    const staminaGain = (elapsedMs / 1000) * input.player.staminaRegenPerSecond;
+    const nextStamina = Math.min(
+        input.player.staminaMax,
+        input.player.stamina + staminaGain
+    );
+
+    return {
+        ...input.player,
+        stamina: nextStamina,
+        lastStaminaUpdatedAt: input.now
+    };
+}
+
+function isRepeatedPunch(input: {
+    player: BeatdownPlayerState;
+    hitType: BeatdownHitType;
+}): boolean {
+    if (input.hitType === "kick") {
+        return false;
+    }
+
+    return input.player.lastHitType === input.hitType;
 }
 
 function getDamageByHitType(hitType: BeatdownHitType): number {
@@ -140,6 +202,14 @@ function getDamageByHitType(hitType: BeatdownHitType): number {
     }
 
     return PUNCH_DAMAGE;
+}
+
+function getStaminaCostByHitType(hitType: BeatdownHitType): number {
+    if (hitType === "kick") {
+        return KICK_STAMINA_COST;
+    }
+
+    return PUNCH_STAMINA_COST;
 }
 
 function isHitOnCooldown(input: {
@@ -164,7 +234,6 @@ function isHitOnCooldown(input: {
 
 function updateBattlePlayerAfterBeatdownHit(input: {
     player: BattlePlayerState;
-    hitType: BeatdownHitType;
     hitAt: number;
     damageDealt: number;
 }): BattlePlayerState {
@@ -192,11 +261,18 @@ function updateBeatdownPlayerAfterHit(input: {
     hitType: BeatdownHitType;
     hitAt: number;
     damageDealt: number;
+    staminaCost: number;
 }): BeatdownPlayerState {
+    const nextStamina = Math.max(0, input.player.stamina - input.staminaCost);
+
     if (input.hitType === "kick") {
         return {
             ...input.player,
+            stamina: nextStamina,
+            lastStaminaUpdatedAt: input.hitAt,
+
             kickCharge: 0,
+
             lastHitType: input.hitType,
             lastHitAt: input.hitAt,
             lastHitDamage: input.damageDealt,
@@ -206,10 +282,14 @@ function updateBeatdownPlayerAfterHit(input: {
 
     return {
         ...input.player,
+        stamina: nextStamina,
+        lastStaminaUpdatedAt: input.hitAt,
+
         kickCharge: Math.min(
             input.player.kickChargeMax,
             input.player.kickCharge + PUNCH_KICK_CHARGE_GAIN
         ),
+
         lastHitType: input.hitType,
         lastHitAt: input.hitAt,
         lastHitDamage: input.damageDealt

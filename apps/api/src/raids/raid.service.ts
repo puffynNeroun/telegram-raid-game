@@ -41,7 +41,12 @@ import {
     RAID_TTL_SECONDS
 } from "./raid.types.js";
 import type { RaidRepository } from "./raid.repository.js";
-import { applyBeatdownHitToBattle } from "./beatdown.rules.js";
+import {
+    applyBeatdownHitToBattle,
+    BEATDOWN_KICK_CHARGE_MAX,
+    BEATDOWN_STAMINA_MAX,
+    BEATDOWN_STAMINA_REGEN_PER_SECOND
+} from "./beatdown.rules.js";
 
 type ApplyBattleDamageResult =
     | {
@@ -67,7 +72,6 @@ type BattleInputCandidate = {
 
 type RandomGenerator = () => number;
 const DEFAULT_COMBAT_MODE = "rhythm" as const;
-const BEATDOWN_KICK_CHARGE_MAX = 100;
 
 export class RaidService {
     constructor(private readonly raidRepository: RaidRepository) {}
@@ -588,7 +592,9 @@ export class RaidService {
             damageDealt: hitResult.damageDealt,
             combo: hitResult.combo,
             kickCharge: hitResult.kickCharge,
-            kickChargeMax: hitResult.kickChargeMax
+            kickChargeMax: hitResult.kickChargeMax,
+            stamina: hitResult.stamina,
+            staminaMax: hitResult.staminaMax
         };
     }
 
@@ -864,7 +870,8 @@ export class RaidService {
             beatdown:
                 combatMode === "beatdown"
                     ? createBeatdownState({
-                        players
+                        players,
+                        now: input.startedAt
                     })
                     : null
         };
@@ -933,7 +940,10 @@ function createBattlePlayers(input: {
     );
 }
 
-function createBeatdownState(input: { players: RaidPlayer[] }): BeatdownState {
+function createBeatdownState(input: {
+    players: RaidPlayer[];
+    now: number;
+}): BeatdownState {
     return {
         players: Object.fromEntries(
             input.players.map((player) => [
@@ -941,6 +951,11 @@ function createBeatdownState(input: { players: RaidPlayer[] }): BeatdownState {
                 {
                     telegramUserId: player.telegramUserId,
                     displayName: player.displayName,
+
+                    stamina: BEATDOWN_STAMINA_MAX,
+                    staminaMax: BEATDOWN_STAMINA_MAX,
+                    staminaRegenPerSecond: BEATDOWN_STAMINA_REGEN_PER_SECOND,
+                    lastStaminaUpdatedAt: input.now,
 
                     kickCharge: 0,
                     kickChargeMax: BEATDOWN_KICK_CHARGE_MAX,
