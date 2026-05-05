@@ -13,3 +13,4 @@ EOF
 /attack_sprites_transparent_split.zip
 /character_hp_sprites_split.zip
 /.tmp-beatdown-assets/
+.env.production
