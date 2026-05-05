@@ -285,9 +285,9 @@
     position: absolute;
     left: 50%;
     top: 0;
-    bottom: 78px;
+    bottom: 108px;
     z-index: 8;
-    width: min(83%, 380px);
+    width: min(80%, 364px);
     display: grid;
     place-items: end center;
     transform: translateX(-50%);
@@ -380,10 +380,10 @@
 .raid-beatdown-impact {
     position: absolute;
     left: 50%;
-    top: 36%;
-    z-index: 24;
-    width: 106px;
-    height: 106px;
+    top: 44%;
+    z-index: 64;
+    width: 108px;
+    height: 108px;
     display: grid;
     place-items: center;
     transform: translate(-50%, -50%);
@@ -392,43 +392,43 @@
 }
 
 .raid-beatdown-impact span {
-    width: 86px;
-    height: 86px;
+    width: 96px;
+    height: 96px;
     border-radius: 999px;
     background:
-            radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.98) 0 8%, rgba(253, 230, 138, 0.98) 9% 18%, transparent 19%),
-            conic-gradient(from 4deg, transparent 0deg 18deg, rgba(251, 191, 36, 0.96) 19deg 30deg, transparent 31deg 54deg, rgba(248, 113, 113, 0.98) 55deg 68deg, transparent 69deg 98deg, rgba(253, 230, 138, 0.98) 99deg 115deg, transparent 116deg 146deg, rgba(251, 191, 36, 0.92) 147deg 161deg, transparent 162deg 198deg, rgba(248, 113, 113, 0.96) 199deg 212deg, transparent 213deg 249deg, rgba(253, 230, 138, 0.98) 250deg 265deg, transparent 266deg 314deg, rgba(251, 191, 36, 0.92) 315deg 331deg, transparent 332deg 360deg);
+            radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.98) 0 7%, rgba(253, 230, 138, 0.98) 8% 17%, transparent 18%),
+            conic-gradient(from 4deg, transparent 0deg 16deg, rgba(251, 191, 36, 0.98) 17deg 31deg, transparent 32deg 55deg, rgba(248, 113, 113, 0.98) 56deg 70deg, transparent 71deg 98deg, rgba(253, 230, 138, 0.98) 99deg 116deg, transparent 117deg 146deg, rgba(251, 191, 36, 0.96) 147deg 163deg, transparent 164deg 198deg, rgba(248, 113, 113, 0.98) 199deg 214deg, transparent 215deg 249deg, rgba(253, 230, 138, 0.98) 250deg 267deg, transparent 268deg 314deg, rgba(251, 191, 36, 0.96) 315deg 333deg, transparent 334deg 360deg);
     filter:
-            drop-shadow(0 0 18px rgba(251, 191, 36, 0.34))
-            drop-shadow(0 10px 22px rgba(0, 0, 0, 0.36));
+            drop-shadow(0 0 22px rgba(251, 191, 36, 0.38))
+            drop-shadow(0 12px 24px rgba(0, 0, 0, 0.4));
 }
 
 .raid-beatdown-impact-left {
-    left: 42%;
-    top: 37%;
+    left: 43%;
+    top: 45%;
 }
 
 .raid-beatdown-impact-right {
-    left: 58%;
-    top: 37%;
+    left: 57%;
+    top: 45%;
 }
 
 .raid-beatdown-impact-kick {
     left: 50%;
-    top: 43%;
+    top: 56%;
 }
 
 .raid-beatdown-damage-pop {
     position: absolute;
     left: 50%;
-    top: 27%;
-    z-index: 30;
-    padding: 5px 9px;
-    border: 1px solid rgba(251, 191, 36, 0.32);
+    top: 35%;
+    z-index: 70;
+    padding: 6px 10px;
+    border: 1px solid rgba(251, 191, 36, 0.4);
     border-radius: 999px;
-    background: rgba(15, 23, 42, 0.68);
+    background: rgba(15, 23, 42, 0.74);
     color: #fde68a;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 1000;
     line-height: 1;
     transform: translate(-50%, -50%);
@@ -439,10 +439,10 @@
 .raid-beatdown-player-limbs {
     position: absolute;
     left: 50%;
-    bottom: 84px;
+    bottom: -12px;
     z-index: 52;
-    width: min(100%, 460px);
-    height: 220px;
+    width: min(116%, 540px);
+    height: 268px;
     transform: translateX(-50%);
     pointer-events: none;
 }
@@ -455,61 +455,62 @@
     user-select: none;
     -webkit-user-drag: none;
     filter:
-            drop-shadow(0 16px 22px rgba(0, 0, 0, 0.48))
+            drop-shadow(0 16px 22px rgba(0, 0, 0, 0.5))
             drop-shadow(0 0 10px rgba(248, 250, 252, 0.05));
 }
 
 .raid-beatdown-arm {
-    bottom: 0;
-    width: 178px;
-    height: 178px;
+    bottom: -28px;
+    z-index: 54;
+    width: 218px;
+    height: 218px;
     transform-origin: 50% 92%;
-    opacity: 0.96;
+    opacity: 0.98;
 }
 
 .raid-beatdown-arm.is-left {
-    left: -12px;
-    transform: rotate(-8deg);
+    left: -46px;
+    transform: rotate(-9deg);
 }
 
 .raid-beatdown-arm.is-right {
-    right: -12px;
-    transform: rotate(8deg);
+    right: -46px;
+    transform: rotate(9deg);
 }
 
 .raid-beatdown-leg {
     left: 50%;
-    bottom: -20px;
-    z-index: 56;
-    width: 250px;
-    height: 220px;
+    bottom: -128px;
+    z-index: 58;
+    width: 310px;
+    height: 284px;
     opacity: 0;
-    transform: translateX(-50%) translateY(80px) scale(0.74);
+    transform: translateX(-50%) translateY(120px) scale(0.64);
     transform-origin: 50% 100%;
 }
 
 .raid-beatdown-player-limbs.is-left .raid-beatdown-arm.is-left {
-    animation: beatdownLeftAssetPunch 210ms ease-out both;
+    animation: beatdownLeftAssetPunch 220ms cubic-bezier(0.16, 0.88, 0.22, 1) both;
 }
 
 .raid-beatdown-player-limbs.is-left .raid-beatdown-arm.is-right {
-    animation: beatdownRightGuardLean 210ms ease-out both;
+    animation: beatdownRightGuardLean 220ms ease-out both;
 }
 
 .raid-beatdown-player-limbs.is-right .raid-beatdown-arm.is-right {
-    animation: beatdownRightAssetPunch 210ms ease-out both;
+    animation: beatdownRightAssetPunch 220ms cubic-bezier(0.16, 0.88, 0.22, 1) both;
 }
 
 .raid-beatdown-player-limbs.is-right .raid-beatdown-arm.is-left {
-    animation: beatdownLeftGuardLean 210ms ease-out both;
+    animation: beatdownLeftGuardLean 220ms ease-out both;
 }
 
 .raid-beatdown-player-limbs.is-kick .raid-beatdown-arm {
-    animation: beatdownHandsDropForKick 240ms ease-out both;
+    animation: beatdownHandsDropForKick 260ms ease-out both;
 }
 
 .raid-beatdown-player-limbs.is-kick .raid-beatdown-leg {
-    animation: beatdownKickAsset 260ms ease-out both;
+    animation: beatdownKickAsset 310ms cubic-bezier(0.16, 0.9, 0.22, 1) both;
 }
 
 .raid-beatdown-intro,
@@ -972,89 +973,89 @@
 
 @keyframes beatdownLeftAssetPunch {
     0% {
-        transform: translate(0, 0) rotate(-8deg) scale(0.96);
+        transform: translate(0, 0) rotate(-9deg) scale(0.96);
     }
 
-    50% {
-        transform: translate(96px, -92px) rotate(8deg) scale(1.12);
+    48% {
+        transform: translate(118px, -88px) rotate(5deg) scale(1.14);
     }
 
     100% {
-        transform: translate(0, 0) rotate(-8deg) scale(0.96);
+        transform: translate(0, 0) rotate(-9deg) scale(0.96);
     }
 }
 
 @keyframes beatdownRightAssetPunch {
     0% {
-        transform: translate(0, 0) rotate(8deg) scale(0.96);
+        transform: translate(0, 0) rotate(9deg) scale(0.96);
     }
 
-    50% {
-        transform: translate(-96px, -92px) rotate(-8deg) scale(1.12);
+    48% {
+        transform: translate(-118px, -88px) rotate(-5deg) scale(1.14);
     }
 
     100% {
-        transform: translate(0, 0) rotate(8deg) scale(0.96);
+        transform: translate(0, 0) rotate(9deg) scale(0.96);
     }
 }
 
 @keyframes beatdownLeftGuardLean {
     0%,
     100% {
-        transform: rotate(-8deg);
+        transform: rotate(-9deg) scale(0.98);
     }
 
     50% {
-        transform: translate(-8px, 7px) rotate(-14deg) scale(0.98);
+        transform: translate(-10px, 8px) rotate(-15deg) scale(0.94);
     }
 }
 
 @keyframes beatdownRightGuardLean {
     0%,
     100% {
-        transform: rotate(8deg);
+        transform: rotate(9deg) scale(0.98);
     }
 
     50% {
-        transform: translate(8px, 7px) rotate(14deg) scale(0.98);
+        transform: translate(10px, 8px) rotate(15deg) scale(0.94);
     }
 }
 
 @keyframes beatdownHandsDropForKick {
     0% {
         transform: translateY(0) scale(0.96);
-        opacity: 0.94;
+        opacity: 0.96;
     }
 
-    55% {
+    52% {
         transform: translateY(34px) scale(0.82);
-        opacity: 0.58;
+        opacity: 0.5;
     }
 
     100% {
         transform: translateY(0) scale(0.96);
-        opacity: 0.9;
+        opacity: 0.92;
     }
 }
 
 @keyframes beatdownKickAsset {
     0% {
         opacity: 0;
-        transform: translateX(-50%) translateY(88px) scale(0.72) rotate(-4deg);
+        transform: translateX(-50%) translateY(128px) scale(0.6) rotate(-6deg);
     }
 
-    28% {
+    24% {
         opacity: 1;
     }
 
-    58% {
+    56% {
         opacity: 1;
-        transform: translateX(-50%) translateY(-72px) scale(1.22) rotate(1deg);
+        transform: translateX(-50%) translateY(-34px) scale(1.1) rotate(-1deg);
     }
 
     100% {
         opacity: 0;
-        transform: translateX(-50%) translateY(78px) scale(0.76) rotate(4deg);
+        transform: translateX(-50%) translateY(108px) scale(0.66) rotate(4deg);
     }
 }
 
@@ -1071,27 +1072,96 @@
 }
 
 @media (max-height: 740px) {
+    .raid-beatdown-top-hud {
+        padding-top: 7px;
+        padding-bottom: 3px;
+    }
+
+    .raid-beatdown-boss-hud {
+        padding-bottom: 3px;
+    }
+
+    .raid-beatdown-boss-title h1 {
+        font-size: clamp(25px, 7vw, 36px);
+    }
+
     .raid-beatdown-boss-wrap {
-        bottom: 64px;
+        top: 0;
+        bottom: 92px;
         width: min(78%, 340px);
     }
 
+    .raid-beatdown-side-stats {
+        top: 24px;
+        width: 98px;
+    }
+
     .raid-beatdown-player-limbs {
-        bottom: 72px;
-        height: 190px;
+        bottom: -16px;
+        height: 238px;
+        width: min(120%, 520px);
     }
 
     .raid-beatdown-arm {
-        width: 150px;
-        height: 150px;
+        bottom: -30px;
+        width: 196px;
+        height: 196px;
+    }
+
+    .raid-beatdown-arm.is-left {
+        left: -54px;
+    }
+
+    .raid-beatdown-arm.is-right {
+        right: -54px;
     }
 
     .raid-beatdown-leg {
-        width: 222px;
-        height: 198px;
+        bottom: -132px;
+        width: 284px;
+        height: 260px;
+    }
+
+    .raid-beatdown-bottom-hud {
+        gap: 6px;
+        padding: 6px 9px 8px;
+    }
+
+    .raid-beatdown-charge-panel,
+    .raid-beatdown-stamina-panel {
+        gap: 5px;
+        padding: 7px 9px;
     }
 
     .raid-beatdown-action {
-        min-height: 62px;
+        min-height: 60px;
+        border-radius: 19px;
+    }
+}
+
+@media (max-width: 380px) {
+    .raid-beatdown-player-limbs {
+        width: min(124%, 520px);
+    }
+
+    .raid-beatdown-arm {
+        width: 202px;
+        height: 202px;
+    }
+
+    .raid-beatdown-arm.is-left {
+        left: -62px;
+    }
+
+    .raid-beatdown-arm.is-right {
+        right: -62px;
+    }
+
+    .raid-beatdown-impact-left {
+        left: 42%;
+    }
+
+    .raid-beatdown-impact-right {
+        left: 58%;
     }
 }

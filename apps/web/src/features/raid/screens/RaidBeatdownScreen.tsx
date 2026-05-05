@@ -188,7 +188,7 @@ export function RaidBeatdownScreen({
                 className={stageClassName}
                 style={
                     {
-                        "--raid-arena-image": `url('/raid/${bossAssetSlug}/arena.png')`,
+                        "--raid-arena-image": "url('/raid/beatdown/arena.png')",
                         "--kick-charge": `${kickChargePercent}%`,
                         "--stamina": `${staminaPercent}%`
                     } as CSSProperties
