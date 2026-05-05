@@ -27,7 +27,7 @@ type RaidBeatdownScreenProps = {
 };
 
 type BossStageView = {
-    key: "100" | "66" | "33" | "0";
+    key: "100" | "80" | "66" | "60" | "40" | "33" | "20" | "0";
     label: string;
     src: string;
 };
@@ -43,7 +43,7 @@ type BattleAnnouncement = {
     toneClassName: "is-victory" | "is-defeat";
 };
 
-const HIT_FX_DURATION_MS = 260;
+const HIT_FX_DURATION_MS = 280;
 
 export function RaidBeatdownScreen({
                                        raid,
@@ -85,6 +85,10 @@ export function RaidBeatdownScreen({
         assetSlug: bossAssetSlug,
         subtitle: battle.boss.subtitle
     });
+
+    const activeHitType = hitFx?.hitType ?? null;
+    const playerLimbPose = activeHitType ?? "idle";
+    const playerLimbAssets = getPlayerLimbAssets(activeHitType);
 
     const battleTimeLeft = isBattleConcluded
         ? "0:00"
@@ -285,7 +289,7 @@ export function RaidBeatdownScreen({
                                 className={`raid-beatdown-impact raid-beatdown-impact-${hitFx.hitType}`}
                                 key={hitFx.id}
                             >
-                                <span>{hitFx.hitType === "kick" ? "💥" : "✦"}</span>
+                                <span />
                             </div>
                         )}
 
@@ -296,9 +300,28 @@ export function RaidBeatdownScreen({
                         )}
                     </div>
 
-                    <div className="raid-beatdown-hands" aria-hidden="true">
-                        <div className="raid-beatdown-fist is-left">✊</div>
-                        <div className="raid-beatdown-fist is-right">✊</div>
+                    <div
+                        className={`raid-beatdown-player-limbs is-${playerLimbPose}`}
+                        aria-hidden="true"
+                    >
+                        <img
+                            className="raid-beatdown-arm is-left"
+                            src={playerLimbAssets.leftHandSrc}
+                            alt=""
+                            draggable={false}
+                        />
+                        <img
+                            className="raid-beatdown-arm is-right"
+                            src={playerLimbAssets.rightHandSrc}
+                            alt=""
+                            draggable={false}
+                        />
+                        <img
+                            className="raid-beatdown-leg"
+                            src={playerLimbAssets.kickSrc}
+                            alt=""
+                            draggable={false}
+                        />
                     </div>
 
                     {isBattleIntroActive && (
@@ -424,13 +447,56 @@ function getBossStage(input: {
     assetSlug: string;
     subtitle: string;
 }): BossStageView {
-    const basePath = `/raid/${input.assetSlug}`;
+    const hasBeatdownBossAssets = hasSixStageBeatdownBossAssets(input.assetSlug);
+    const basePath = hasBeatdownBossAssets
+        ? `/raid/${input.assetSlug}/beatdown`
+        : `/raid/${input.assetSlug}`;
 
     if (input.bossHpPercent <= 0) {
         return {
             key: "0",
             label: "Knockout",
             src: `${basePath}/boss-0.png`
+        };
+    }
+
+    if (hasBeatdownBossAssets) {
+        if (input.bossHpPercent <= 20) {
+            return {
+                key: "20",
+                label: "Critical",
+                src: `${basePath}/boss-20.png`
+            };
+        }
+
+        if (input.bossHpPercent <= 40) {
+            return {
+                key: "40",
+                label: "Heavy damage",
+                src: `${basePath}/boss-40.png`
+            };
+        }
+
+        if (input.bossHpPercent <= 60) {
+            return {
+                key: "60",
+                label: "Bruised",
+                src: `${basePath}/boss-60.png`
+            };
+        }
+
+        if (input.bossHpPercent <= 80) {
+            return {
+                key: "80",
+                label: "Light damage",
+                src: `${basePath}/boss-80.png`
+            };
+        }
+
+        return {
+            key: "100",
+            label: input.subtitle || "Fresh",
+            src: `${basePath}/boss-100.png`
         };
     }
 
@@ -454,6 +520,57 @@ function getBossStage(input: {
         key: "100",
         label: input.subtitle || "Fresh",
         src: `${basePath}/boss-100.png`
+    };
+}
+
+const SIX_STAGE_BEATDOWN_BOSS_ASSET_SLUGS = new Set<string>([
+    "rosemaul",
+    "boss-002",
+    "boss-003",
+    "boss-004",
+    "boss-006"
+]);
+
+function hasSixStageBeatdownBossAssets(assetSlug: string): boolean {
+    return SIX_STAGE_BEATDOWN_BOSS_ASSET_SLUGS.has(assetSlug);
+}
+
+function getPlayerLimbAssets(hitType: BeatdownHitType | null): {
+    leftHandSrc: string;
+    rightHandSrc: string;
+    kickSrc: string;
+} {
+    const handsBasePath = "/raid/beatdown/player/hands";
+    const kickBasePath = "/raid/beatdown/player/kick";
+
+    if (hitType === "left") {
+        return {
+            leftHandSrc: `${handsBasePath}/03_left_straight_punch_blur.png`,
+            rightHandSrc: `${handsBasePath}/05_right_guard_high.png`,
+            kickSrc: `${kickBasePath}/01_right_leg_idle_front.png`
+        };
+    }
+
+    if (hitType === "right") {
+        return {
+            leftHandSrc: `${handsBasePath}/01_left_guard_high.png`,
+            rightHandSrc: `${handsBasePath}/08_right_straight_punch_blur.png`,
+            kickSrc: `${kickBasePath}/01_right_leg_idle_front.png`
+        };
+    }
+
+    if (hitType === "kick") {
+        return {
+            leftHandSrc: `${handsBasePath}/06_left_guard_low.png`,
+            rightHandSrc: `${handsBasePath}/10_right_guard_low.png`,
+            kickSrc: `${kickBasePath}/04_right_leg_kick_extension_blur.png`
+        };
+    }
+
+    return {
+        leftHandSrc: `${handsBasePath}/01_left_guard_high.png`,
+        rightHandSrc: `${handsBasePath}/05_right_guard_high.png`,
+        kickSrc: `${kickBasePath}/01_right_leg_idle_front.png`
     };
 }
 

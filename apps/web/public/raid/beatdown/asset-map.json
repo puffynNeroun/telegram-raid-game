@@ -1,0 +1,32 @@
+﻿[
+    {
+        "label":  "black_boxer",
+        "bossSlug":  "boss-002",
+        "source":  "character_01_black_boxer",
+        "beatdownPath":  "/raid/boss-002/beatdown"
+    },
+    {
+        "label":  "black_hoodie",
+        "bossSlug":  "boss-003",
+        "source":  "character_02_black_hoodie",
+        "beatdownPath":  "/raid/boss-003/beatdown"
+    },
+    {
+        "label":  "cigar_hoodie",
+        "bossSlug":  "boss-004",
+        "source":  "character_03_cigar_hoodie",
+        "beatdownPath":  "/raid/boss-004/beatdown"
+    },
+    {
+        "label":  "leather_headphones",
+        "bossSlug":  "boss-005",
+        "source":  "character_04_leather_headphones",
+        "beatdownPath":  "/raid/boss-005/beatdown"
+    },
+    {
+        "label":  "fox_hoodie_cap",
+        "bossSlug":  "boss-006",
+        "source":  "character_05_fox_hoodie_cap",
+        "beatdownPath":  "/raid/boss-006/beatdown"
+    }
+]

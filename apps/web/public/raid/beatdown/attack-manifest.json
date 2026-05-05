@@ -1,0 +1,218 @@
+{
+  "source_files": [
+    "Тема 8.png",
+    "Тема 9.png"
+  ],
+  "sprites": [
+    {
+      "file": "hands/01_left_guard_high.png",
+      "description": "left hand, high guard/start frame",
+      "size": [
+        249,
+        291
+      ],
+      "bbox": [
+        0,
+        0,
+        239,
+        281
+      ]
+    },
+    {
+      "file": "hands/02_left_ready_high.png",
+      "description": "left hand, ready frame",
+      "size": [
+        280,
+        291
+      ],
+      "bbox": [
+        248,
+        1,
+        260,
+        280
+      ]
+    },
+    {
+      "file": "hands/03_left_straight_punch_blur.png",
+      "description": "left straight punch, fast strike with motion blur",
+      "size": [
+        288,
+        271
+      ],
+      "bbox": [
+        542,
+        20,
+        268,
+        251
+      ]
+    },
+    {
+      "file": "hands/04_right_ready_high.png",
+      "description": "right hand, ready frame",
+      "size": [
+        285,
+        291
+      ],
+      "bbox": [
+        935,
+        1,
+        265,
+        280
+      ]
+    },
+    {
+      "file": "hands/05_right_guard_high.png",
+      "description": "right hand, high guard/start frame",
+      "size": [
+        246,
+        289
+      ],
+      "bbox": [
+        1212,
+        0,
+        236,
+        279
+      ]
+    },
+    {
+      "file": "hands/06_left_guard_low.png",
+      "description": "left hand, low guard/start frame",
+      "size": [
+        226,
+        294
+      ],
+      "bbox": [
+        0,
+        419,
+        216,
+        282
+      ]
+    },
+    {
+      "file": "hands/07_left_ready_low.png",
+      "description": "left hand, low ready frame",
+      "size": [
+        289,
+        289
+      ],
+      "bbox": [
+        250,
+        424,
+        269,
+        279
+      ]
+    },
+    {
+      "file": "hands/08_right_straight_punch_blur.png",
+      "description": "right straight punch, fast strike with motion blur",
+      "size": [
+        286,
+        270
+      ],
+      "bbox": [
+        643,
+        443,
+        266,
+        254
+      ]
+    },
+    {
+      "file": "hands/09_right_ready_low.png",
+      "description": "right hand, low ready frame",
+      "size": [
+        280,
+        287
+      ],
+      "bbox": [
+        943,
+        426,
+        260,
+        277
+      ]
+    },
+    {
+      "file": "hands/10_right_guard_low.png",
+      "description": "right hand, low guard/start frame",
+      "size": [
+        246,
+        294
+      ],
+      "bbox": [
+        1212,
+        419,
+        236,
+        282
+      ]
+    },
+    {
+      "file": "right_leg_kick/01_right_leg_idle_front.png",
+      "description": "right leg, front idle/start frame",
+      "size": [
+        211,
+        458
+      ],
+      "bbox": [
+        0,
+        36,
+        201,
+        448
+      ]
+    },
+    {
+      "file": "right_leg_kick/02_right_leg_kick_windup.png",
+      "description": "right leg, kick windup frame",
+      "size": [
+        268,
+        478
+      ],
+      "bbox": [
+        280,
+        16,
+        248,
+        468
+      ]
+    },
+    {
+      "file": "right_leg_kick/03_right_leg_kick_mid.png",
+      "description": "right leg, mid kick frame",
+      "size": [
+        297,
+        467
+      ],
+      "bbox": [
+        554,
+        27,
+        277,
+        457
+      ]
+    },
+    {
+      "file": "right_leg_kick/04_right_leg_kick_extension_blur.png",
+      "description": "right leg, full extension with motion blur",
+      "size": [
+        245,
+        484
+      ],
+      "bbox": [
+        946,
+        0,
+        225,
+        484
+      ]
+    },
+    {
+      "file": "right_leg_kick/05_right_leg_return_idle.png",
+      "description": "right leg, return/idle frame",
+      "size": [
+        205,
+        445
+      ],
+      "bbox": [
+        1347,
+        49,
+        195,
+        435
+      ]
+    }
+  ]
+}

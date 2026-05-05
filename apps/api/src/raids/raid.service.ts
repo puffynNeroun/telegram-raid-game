@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { DEFAULT_BOSS_ID, getBossConfig, isBossId } from "./boss.config.js";
+import { isBeatdownBossId, resolveBeatdownBossId } from "./beatdown.bosses.js";
 import type {
     BattleAttackInput,
     BattleAttackResult,

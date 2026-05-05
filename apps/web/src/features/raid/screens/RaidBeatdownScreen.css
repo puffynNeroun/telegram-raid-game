@@ -14,6 +14,7 @@
 .raid-beatdown-stage {
     --raid-arena-image: none;
     --kick-charge: 0%;
+    --stamina: 0%;
 
     position: relative;
     width: min(100%, 460px);
@@ -306,13 +307,23 @@
     animation: beatdownBossIdle 3.2s ease-in-out infinite;
 }
 
-.raid-beatdown-boss-66 {
+.raid-beatdown-boss-80 {
+    animation-duration: 3s;
+}
+
+.raid-beatdown-boss-66,
+.raid-beatdown-boss-60 {
     animation-duration: 2.9s;
 }
 
+.raid-beatdown-boss-40,
 .raid-beatdown-boss-33 {
     animation-name: beatdownBossRage;
     animation-duration: 1.8s;
+}
+
+.raid-beatdown-boss-20 {
+    animation: beatdownBossCritical 1.35s ease-in-out infinite;
 }
 
 .raid-beatdown-boss-0 {
@@ -381,9 +392,14 @@
 }
 
 .raid-beatdown-impact span {
-    font-size: 72px;
+    width: 86px;
+    height: 86px;
+    border-radius: 999px;
+    background:
+            radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.98) 0 8%, rgba(253, 230, 138, 0.98) 9% 18%, transparent 19%),
+            conic-gradient(from 4deg, transparent 0deg 18deg, rgba(251, 191, 36, 0.96) 19deg 30deg, transparent 31deg 54deg, rgba(248, 113, 113, 0.98) 55deg 68deg, transparent 69deg 98deg, rgba(253, 230, 138, 0.98) 99deg 115deg, transparent 116deg 146deg, rgba(251, 191, 36, 0.92) 147deg 161deg, transparent 162deg 198deg, rgba(248, 113, 113, 0.96) 199deg 212deg, transparent 213deg 249deg, rgba(253, 230, 138, 0.98) 250deg 265deg, transparent 266deg 314deg, rgba(251, 191, 36, 0.92) 315deg 331deg, transparent 332deg 360deg);
     filter:
-            drop-shadow(0 0 18px rgba(251, 191, 36, 0.32))
+            drop-shadow(0 0 18px rgba(251, 191, 36, 0.34))
             drop-shadow(0 10px 22px rgba(0, 0, 0, 0.36));
 }
 
@@ -420,57 +436,80 @@
     pointer-events: none;
 }
 
-.raid-beatdown-hands {
+.raid-beatdown-player-limbs {
     position: absolute;
     left: 50%;
-    bottom: 116px;
+    bottom: 84px;
     z-index: 52;
-    width: min(100%, 430px);
-    height: 120px;
+    width: min(100%, 460px);
+    height: 220px;
     transform: translateX(-50%);
     pointer-events: none;
 }
 
-.raid-beatdown-fist {
+.raid-beatdown-arm,
+.raid-beatdown-leg {
     position: absolute;
+    display: block;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+    filter:
+            drop-shadow(0 16px 22px rgba(0, 0, 0, 0.48))
+            drop-shadow(0 0 10px rgba(248, 250, 252, 0.05));
+}
+
+.raid-beatdown-arm {
     bottom: 0;
-    width: 116px;
-    height: 116px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(226, 232, 240, 0.12);
-    border-radius: 34px;
-    background:
-            radial-gradient(circle at 34% 18%, rgba(255, 255, 255, 0.14), transparent 35%),
-            linear-gradient(180deg, rgba(100, 116, 139, 0.18), rgba(15, 23, 42, 0.2));
-    font-size: 62px;
-    box-shadow:
-            0 16px 28px rgba(0, 0, 0, 0.34),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(9px);
-    opacity: 0.92;
+    width: 178px;
+    height: 178px;
+    transform-origin: 50% 92%;
+    opacity: 0.96;
 }
 
-.raid-beatdown-fist.is-left {
-    left: 26px;
-    transform: rotate(-12deg);
+.raid-beatdown-arm.is-left {
+    left: -12px;
+    transform: rotate(-8deg);
 }
 
-.raid-beatdown-fist.is-right {
-    right: 26px;
-    transform: rotate(12deg) scaleX(-1);
+.raid-beatdown-arm.is-right {
+    right: -12px;
+    transform: rotate(8deg);
 }
 
-.raid-beatdown-stage.is-hit-left .raid-beatdown-fist.is-left {
-    animation: beatdownLeftPunch 180ms ease-out both;
+.raid-beatdown-leg {
+    left: 50%;
+    bottom: -20px;
+    z-index: 56;
+    width: 250px;
+    height: 220px;
+    opacity: 0;
+    transform: translateX(-50%) translateY(80px) scale(0.74);
+    transform-origin: 50% 100%;
 }
 
-.raid-beatdown-stage.is-hit-right .raid-beatdown-fist.is-right {
-    animation: beatdownRightPunch 180ms ease-out both;
+.raid-beatdown-player-limbs.is-left .raid-beatdown-arm.is-left {
+    animation: beatdownLeftAssetPunch 210ms ease-out both;
 }
 
-.raid-beatdown-stage.is-hit-kick .raid-beatdown-hands {
-    animation: beatdownKickShake 230ms ease-out both;
+.raid-beatdown-player-limbs.is-left .raid-beatdown-arm.is-right {
+    animation: beatdownRightGuardLean 210ms ease-out both;
+}
+
+.raid-beatdown-player-limbs.is-right .raid-beatdown-arm.is-right {
+    animation: beatdownRightAssetPunch 210ms ease-out both;
+}
+
+.raid-beatdown-player-limbs.is-right .raid-beatdown-arm.is-left {
+    animation: beatdownLeftGuardLean 210ms ease-out both;
+}
+
+.raid-beatdown-player-limbs.is-kick .raid-beatdown-arm {
+    animation: beatdownHandsDropForKick 240ms ease-out both;
+}
+
+.raid-beatdown-player-limbs.is-kick .raid-beatdown-leg {
+    animation: beatdownKickAsset 260ms ease-out both;
 }
 
 .raid-beatdown-intro,
@@ -833,6 +872,17 @@
     }
 }
 
+@keyframes beatdownBossCritical {
+    0%,
+    100% {
+        transform: translateY(2px) rotate(-1.2deg) scale(0.99);
+    }
+
+    50% {
+        transform: translateY(-4px) rotate(1.2deg) scale(1.01);
+    }
+}
+
 @keyframes beatdownBossDefeated {
     0%,
     100% {
@@ -920,46 +970,91 @@
     }
 }
 
-@keyframes beatdownLeftPunch {
+@keyframes beatdownLeftAssetPunch {
     0% {
-        transform: translate(0, 0) rotate(-12deg) scale(1);
+        transform: translate(0, 0) rotate(-8deg) scale(0.96);
     }
 
     50% {
-        transform: translate(52px, -74px) rotate(3deg) scale(1.06);
+        transform: translate(96px, -92px) rotate(8deg) scale(1.12);
     }
 
     100% {
-        transform: translate(0, 0) rotate(-12deg) scale(1);
+        transform: translate(0, 0) rotate(-8deg) scale(0.96);
     }
 }
 
-@keyframes beatdownRightPunch {
+@keyframes beatdownRightAssetPunch {
     0% {
-        transform: translate(0, 0) rotate(12deg) scaleX(-1) scale(1);
+        transform: translate(0, 0) rotate(8deg) scale(0.96);
     }
 
     50% {
-        transform: translate(-52px, -74px) rotate(-3deg) scaleX(-1) scale(1.06);
+        transform: translate(-96px, -92px) rotate(-8deg) scale(1.12);
     }
 
     100% {
-        transform: translate(0, 0) rotate(12deg) scaleX(-1) scale(1);
+        transform: translate(0, 0) rotate(8deg) scale(0.96);
     }
 }
 
-@keyframes beatdownKickShake {
+@keyframes beatdownLeftGuardLean {
     0%,
     100% {
-        transform: translateX(-50%) rotate(0deg);
+        transform: rotate(-8deg);
     }
 
-    30% {
-        transform: translateX(calc(-50% - 8px)) rotate(-1deg);
+    50% {
+        transform: translate(-8px, 7px) rotate(-14deg) scale(0.98);
+    }
+}
+
+@keyframes beatdownRightGuardLean {
+    0%,
+    100% {
+        transform: rotate(8deg);
     }
 
-    60% {
-        transform: translateX(calc(-50% + 8px)) rotate(1deg);
+    50% {
+        transform: translate(8px, 7px) rotate(14deg) scale(0.98);
+    }
+}
+
+@keyframes beatdownHandsDropForKick {
+    0% {
+        transform: translateY(0) scale(0.96);
+        opacity: 0.94;
+    }
+
+    55% {
+        transform: translateY(34px) scale(0.82);
+        opacity: 0.58;
+    }
+
+    100% {
+        transform: translateY(0) scale(0.96);
+        opacity: 0.9;
+    }
+}
+
+@keyframes beatdownKickAsset {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(88px) scale(0.72) rotate(-4deg);
+    }
+
+    28% {
+        opacity: 1;
+    }
+
+    58% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-72px) scale(1.22) rotate(1deg);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(78px) scale(0.76) rotate(4deg);
     }
 }
 
@@ -981,15 +1076,19 @@
         width: min(78%, 340px);
     }
 
-    .raid-beatdown-hands {
-        bottom: 102px;
-        height: 104px;
+    .raid-beatdown-player-limbs {
+        bottom: 72px;
+        height: 190px;
     }
 
-    .raid-beatdown-fist {
-        width: 96px;
-        height: 96px;
-        font-size: 52px;
+    .raid-beatdown-arm {
+        width: 150px;
+        height: 150px;
+    }
+
+    .raid-beatdown-leg {
+        width: 222px;
+        height: 198px;
     }
 
     .raid-beatdown-action {

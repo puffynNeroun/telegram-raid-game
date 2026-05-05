@@ -43,6 +43,14 @@ type RaidLobbyScreenProps = {
 
 const FALLBACK_MAX_BOSS_LEVEL = 6;
 
+const BEATDOWN_BOSS_IDS = new Set<BossId>([
+    "boss-001",
+    "boss-002",
+    "boss-003",
+    "boss-004",
+    "boss-006"
+]);
+
 export function RaidLobbyScreen({
                                     raid,
                                     raidId,
@@ -72,9 +80,13 @@ export function RaidLobbyScreen({
                                 }: RaidLobbyScreenProps) {
     const expiresIn = formatClock(raid.expiresAt, localNow);
     const selectedBoss = getSelectedBoss({ raid, bosses });
+    const visibleBosses = getVisibleBosses({
+        bosses,
+        combatMode: raid.combatMode
+    });
     const bossLevel = selectedBoss?.level ?? getBossLevelFromRaid(raid);
     const maxBossLevel =
-        bosses.length > 0 ? bosses.length : FALLBACK_MAX_BOSS_LEVEL;
+        visibleBosses.length > 0 ? visibleBosses.length : FALLBACK_MAX_BOSS_LEVEL;
     const bossProgressLabel = `Boss ${bossLevel} / ${maxBossLevel}`;
     const isUserInLobby = Boolean(currentPlayer);
     const isHost = Boolean(currentPlayer?.isHost);
@@ -223,9 +235,9 @@ export function RaidLobbyScreen({
                         })}
                     </p>
 
-                    {bosses.length > 0 ? (
+                    {visibleBosses.length > 0 ? (
                         <div className="raid-lobby-boss-grid">
-                            {bosses.map((boss) => {
+                            {visibleBosses.map((boss) => {
                                 const isSelected = boss.id === raid.bossId;
                                 const isDisabled =
                                     !canSelectBoss || isSelected || isBossesLoading;
@@ -418,7 +430,7 @@ function getBossSelectorHint({
     }
 
     if (isHost) {
-        return "All bosses are available. Changing the boss resets ready state for the squad.";
+        return "Some bosses are mode-specific. Changing the boss resets ready state for the squad.";
     }
 
     if (isUserInLobby) {
@@ -426,6 +438,19 @@ function getBossSelectorHint({
     }
 
     return "Join the raid first. Host controls boss selection.";
+}
+
+function getVisibleBosses(input: {
+    bosses: BossCatalogItem[];
+    combatMode: RaidCombatMode;
+}): BossCatalogItem[] {
+    if (input.combatMode !== "beatdown") {
+        return input.bosses;
+    }
+
+    return input.bosses.filter((boss: BossCatalogItem) => {
+        return BEATDOWN_BOSS_IDS.has(boss.id);
+    });
 }
 
 function getSelectedBoss(input: {
