@@ -19,7 +19,8 @@ export const env = {
     apiPort: Number(process.env.API_PORT ?? 8080),
     redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
-    telegramWebAppUrl: process.env.TELEGRAM_WEB_APP_URL ?? "https://example.com"
+    telegramWebAppUrl: process.env.TELEGRAM_WEB_APP_URL ?? "https://example.com",
+    telegramMiniAppUrl: process.env.TELEGRAM_MINI_APP_URL ?? ""
 };
 
 if (Number.isNaN(env.apiPort)) {

@@ -48,6 +48,7 @@ try {
     telegramBot = await startTelegramBot({
         token: env.telegramBotToken,
         webAppUrl: env.telegramWebAppUrl,
+        miniAppUrl: env.telegramMiniAppUrl,
         raidService
     });
 } catch (error) {

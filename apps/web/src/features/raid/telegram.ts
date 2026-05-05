@@ -5,6 +5,14 @@ export function initTelegramWebApp(): void {
     window.Telegram?.WebApp?.expand?.();
 }
 
+export function getTelegramStartParam(params: URLSearchParams): string | null {
+    return (
+        params.get("tgWebAppStartParam") ??
+        window.Telegram?.WebApp?.initDataUnsafe?.start_param ??
+        null
+    );
+}
+
 export function getCurrentUser(params: URLSearchParams): CurrentUser {
     const devUserId = params.get("devUserId");
     const devName = params.get("devName");
@@ -80,6 +88,7 @@ declare global {
                 initData?: string;
                 initDataUnsafe?: {
                     user?: TelegramUser;
+                    start_param?: string;
                 };
                 ready?: () => void;
                 expand?: () => void;

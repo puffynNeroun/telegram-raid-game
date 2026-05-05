@@ -7,6 +7,7 @@ import { buildRaidResultMessage } from "./raid-result-message.js";
 type StartTelegramBotOptions = {
     token: string;
     webAppUrl: string;
+    miniAppUrl?: string;
     raidService: RaidService;
 };
 
@@ -16,10 +17,11 @@ export type TelegramBotRuntime = {
 };
 
 export async function startTelegramBot({
-                                           token,
-                                           webAppUrl,
-                                           raidService
-                                       }: StartTelegramBotOptions): Promise<TelegramBotRuntime | null> {
+    token,
+    webAppUrl,
+    miniAppUrl,
+    raidService
+}: StartTelegramBotOptions): Promise<TelegramBotRuntime | null> {
     if (!token) {
         console.log("[bot] disabled: TELEGRAM_BOT_TOKEN is empty");
         return null;
@@ -73,7 +75,8 @@ export async function startTelegramBot({
     registerRaidCommand({
         bot,
         raidService,
-        webAppUrl
+        webAppUrl,
+        miniAppUrl
     });
 
     bot.catch((error) => {

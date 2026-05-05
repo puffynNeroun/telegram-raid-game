@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRaidApi } from "./raidApi";
-import { getCurrentUser, initTelegramWebApp } from "./telegram";
+import { getCurrentUser, getTelegramStartParam, initTelegramWebApp } from "./telegram";
 import { useRaidLobby } from "./useRaidLobby";
 import { RaidBattleScreen } from "./screens/RaidBattleScreen";
 import { RaidBeatdownScreen } from "./screens/RaidBeatdownScreen";
@@ -34,7 +34,7 @@ const DEFAULT_COMBAT_MODE: RaidCombatMode = "rhythm";
 
 export function RaidGame() {
     const params = useMemo(() => new URLSearchParams(window.location.search), []);
-    const raidId = params.get("raidId");
+    const raidId = getRaidIdFromParams(params);
     const chatId = params.get("chatId");
     const requestedCombatMode = getRequestedCombatMode(params);
 
@@ -548,4 +548,21 @@ function getErrorMessage(error: unknown): string {
     }
 
     return "Failed to create a new raid.";
+}
+function getRaidIdFromParams(params: URLSearchParams): string | null {
+    const directRaidId = params.get("raidId");
+
+    if (directRaidId) {
+        return directRaidId;
+    }
+
+    const startParam = getTelegramStartParam(params);
+
+    if (!startParam) {
+        return null;
+    }
+
+    const match = startParam.match(/^raid_([A-Za-z0-9_-]+)$/);
+
+    return match?.[1] ?? null;
 }

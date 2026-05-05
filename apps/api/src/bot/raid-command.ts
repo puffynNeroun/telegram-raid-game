@@ -6,15 +6,17 @@ type RegisterRaidCommandOptions = {
     bot: Telegraf<Context>;
     raidService: RaidService;
     webAppUrl: string;
+    miniAppUrl?: string;
 };
 
 type TelegramUser = NonNullable<Context["from"]>;
 
 export function registerRaidCommand({
-                                        bot,
-                                        raidService,
-                                        webAppUrl
-                                    }: RegisterRaidCommandOptions): void {
+    bot,
+    raidService,
+    webAppUrl,
+    miniAppUrl
+}: RegisterRaidCommandOptions): void {
     bot.hears(/^\/raid(?:@\w+)?$/i, async (ctx) => {
         if (!ctx.chat || ctx.chat.type === "private") {
             await ctx.reply("Use /raid inside a Telegram group.");
@@ -42,9 +44,13 @@ export function registerRaidCommand({
         let joinUrl: string;
 
         try {
-            joinUrl = buildJoinUrl(webAppUrl, raid);
+            joinUrl = buildJoinUrl({
+                webAppUrl,
+                miniAppUrl,
+                raid
+            });
         } catch {
-            await ctx.reply("Bot is misconfigured: TELEGRAM_WEB_APP_URL is invalid.");
+            await ctx.reply("Bot is misconfigured: app URL is invalid.");
             return;
         }
 
@@ -66,7 +72,7 @@ export function registerRaidCommand({
                 message,
                 "",
                 "Local dev link:",
-                joinUrl,
+                buildWebJoinUrl({ webAppUrl, raid }),
                 "",
                 "Telegram cannot use localhost inside an inline button. Open this link manually in your browser."
             ].join("\n")
@@ -84,13 +90,49 @@ function getDisplayName(user: TelegramUser): string {
     return fullName || `user_${user.id}`;
 }
 
-function buildJoinUrl(webAppUrl: string, raid: Raid): string {
-    const url = new URL(webAppUrl);
+function buildJoinUrl(input: {
+    webAppUrl: string;
+    miniAppUrl?: string;
+    raid: Raid;
+}): string {
+    if (input.miniAppUrl) {
+        return buildMiniAppJoinUrl({
+            miniAppUrl: input.miniAppUrl,
+            raid: input.raid
+        });
+    }
 
-    url.searchParams.set("raidId", raid.id);
-    url.searchParams.set("chatId", raid.telegramChatId);
+    return buildWebJoinUrl({
+        webAppUrl: input.webAppUrl,
+        raid: input.raid
+    });
+}
+
+function buildMiniAppJoinUrl(input: {
+    miniAppUrl: string;
+    raid: Raid;
+}): string {
+    const url = new URL(input.miniAppUrl);
+
+    url.searchParams.set("startapp", encodeRaidStartParam(input.raid));
 
     return url.toString();
+}
+
+function buildWebJoinUrl(input: {
+    webAppUrl: string;
+    raid: Raid;
+}): string {
+    const url = new URL(input.webAppUrl);
+
+    url.searchParams.set("raidId", input.raid.id);
+    url.searchParams.set("chatId", input.raid.telegramChatId);
+
+    return url.toString();
+}
+
+function encodeRaidStartParam(raid: Raid): string {
+    return `raid_${raid.id}`;
 }
 
 function canUseTelegramButton(url: string): boolean {
@@ -113,7 +155,7 @@ function canUseTelegramButton(url: string): boolean {
 
 function buildRaidCreatedMessage(raid: Raid): string {
     return [
-        "⚔️ Raid created!",
+        "вљ”пёЏ Raid created!",
         "",
         `Host: ${raid.hostDisplayName}`,
         "Players: 1/6",
@@ -125,7 +167,7 @@ function buildRaidCreatedMessage(raid: Raid): string {
 
 function buildActiveRaidExistsMessage(raid: Raid): string {
     return [
-        "⏳ A raid is already active in this group.",
+        "вЏі A raid is already active in this group.",
         "",
         `Host: ${raid.hostDisplayName}`,
         `Players: ${Object.keys(raid.players).length}/6`,
